@@ -75,8 +75,8 @@ list_high_priority(const struct list_elem* a, const struct list_elem* b, void* a
 
 bool
 list_high_lock_priority(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED){
-  const int a_member = (list_entry(a, struct lock, elem))->donated_priority;
-  const int b_member = (list_entry(b, struct lock, elem))->donated_priority;
+  const int a_member = (list_entry(a, struct lock, elem))->priority;
+  const int b_member = (list_entry(b, struct lock, elem))->priority;
   return a_member > b_member;
 }
 
@@ -222,6 +222,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  //if(t->priority > thread_current()->priority)
+  thread_yield();
+
   return tid;
 }
 
@@ -261,8 +264,11 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, list_high_priority, NULL);
   t->status = THREAD_READY;
+  //printf("ID: %d\n", thread_current()->priority);
+
   if(thread_current() != idle_thread && t->priority > thread_current()->priority)
     thread_yield();
+  printf("CURRENT ID: %d\n", thread_current()->priority);
   intr_set_level (old_level);
   
 }
@@ -333,7 +339,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, list_high_priority, NULL);
+    //list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule();
   intr_set_level (old_level);
@@ -361,9 +368,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  //thread_set_virtual_priority(thread_current());
   // If max priority in ready queue > reunning thread's priority, yield the currrent thread
-  //thread_yield();
   if(!list_empty(&ready_list))
   {
     if(list_entry(list_front (&ready_list), struct thread, elem)->priority > thread_current()->priority)
@@ -378,16 +383,6 @@ thread_get_priority (void)
 {
   // return donated priority
   return thread_current ()->priority;
-}
-
-void
-thread_set_virtual_priority (struct thread *t){
- // if(!list_empty(&t->locks))
-   // t->virtual_priority = list_entry(list_front(&t->locks), struct lock, elem)->donated_priority;
-  
-  
-  if(t->priority > t->virtual_priority)
-    t->virtual_priority =  t->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -544,7 +539,9 @@ next_thread_to_run (void)
   {
    // struct list_elem* next = list_min (&ready_list, list_high_priority, NULL);
    // list_remove(next);
-    return list_entry (list_pop_front(&ready_list), struct thread, elem);
+   struct thread* t = list_entry (list_pop_front(&ready_list), struct thread, elem);
+   //printf("NEXT P: %d\n", t->priority);
+    return t;
   }
 }
 
@@ -615,28 +612,8 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
- // printf("PRI = %d %d %d\n", cur->tid, thread_current()->tid);
+  printf("PRI = %d %d\n", cur->priority, thread_current()->tid);
 }
-/*if(t->priority > thread_get_priority())
-  {
-    struct thread *cur = thread_current ();
-    printf("PRI = %d %d\n", t->tid, cur->tid);
-    if (cur != idle_thread) 
-      list_push_back (&ready_list, &cur->elem);
-    cur->status = THREAD_READY;
-    struct thread *curr = running_thread ();
-    struct thread *next = t;
-    struct thread *prev = NULL;
-    //printf("PRI = %d %d\n", t->tid, cur->tid);
-    if (cur != next)
-      prev = switch_threads (curr, t);
-    thread_schedule_tail (prev);
-    printf("PRI = %d %d\n", t->tid, thread_current()->tid);
-  }
-  else
-  {
-    list_push_back (&ready_list, &t->elem);
-  }*/
 
 /* Returns a tid to use for a new thread. */
 static tid_t
