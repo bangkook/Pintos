@@ -99,6 +99,9 @@ struct thread
     struct list_elem sleepelem;        /* List element for sleeping threads list*/
     int64_t wake_time;
 
+    int virtual_priority;
+    struct list locks;
+    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -130,6 +133,8 @@ tid_t thread_tid (void);
 const char *thread_name (void);
 
 bool list_less_comp(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
+bool list_high_priority(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
+bool list_high_lock_priority(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
@@ -140,6 +145,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_set_virtual_priority (struct thread *t);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

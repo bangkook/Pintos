@@ -27,6 +27,7 @@
 */
 
 #include "threads/synch.h"
+#include "threads/switch.h"
 #include <stdio.h>
 #include <string.h>
 #include "threads/interrupt.h"
@@ -68,7 +69,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      //list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters, &thread_current()->elem, list_high_priority, NULL);
       thread_block ();
     }
   sema->value--;
@@ -197,6 +199,10 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   sema_down (&lock->semaphore);
+  /* Lock acquires maximum priority of the threads waiting on it. */
+ // lock->donated_priority = list_entry(list_front(&(lock->semaphore).waiters), struct thread, elem)->virtual_priority;//Virtual priority
+  //if(lock->holder != thread_current())
+    //list_insert_ordered(&thread_current()->locks, &lock->elem, list_high_lock_priority, NULL);
   lock->holder = thread_current ();
 }
 
