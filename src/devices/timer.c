@@ -103,8 +103,7 @@ timer_sleep (int64_t ticks)
   struct thread *t = thread_current();
   t->wake_time = (start + ticks);
   list_insert_ordered(&sleeping_threads, &t->sleepelem, &list_less_comp, NULL);
-  //list_push_back(&sleeping_threads, &t->sleepelem);
-  //list_sort(&sleeping_threads, &list_less_comp, NULL);
+  
   sema_down(&t->sema);
 }
 
@@ -183,14 +182,13 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
   /* Loop through sleeping threads and wake up those who reached their wake-up time*/
   struct list_elem* iter = list_begin(&sleeping_threads);
   
   while(iter != list_end(&sleeping_threads)) 
   {
     struct thread* t = list_entry(iter, struct thread, sleepelem);
-    if (t->wake_time < timer_ticks())
+    if (t->wake_time <= timer_ticks())
     {
       sema_up(&t->sema);
       iter = list_remove(iter);
@@ -200,6 +198,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       break;
     }
   }
+  thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
