@@ -100,7 +100,6 @@ struct thread
     int64_t wake_time;
 
     int virtual_priority;
-    struct list locks;
     
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
