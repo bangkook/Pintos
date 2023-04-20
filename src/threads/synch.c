@@ -223,8 +223,8 @@ lock_acquire (struct lock *lock)
   /* Lock acquires maximum priority of the threads waiting on it. */
  // lock->donated_priority = list_entry(list_front(&(lock->semaphore).waiters), struct thread, elem)->virtual_priority;//Virtual priority
   //if(lock->holder != thread_current())
-  list_insert_ordered(&thread_current()->locks, &lock->elem, list_high_lock_priority, NULL);
-  //list_push_back(&thread_current()->locks, &lock->elem);
+  //list_insert_ordered(&thread_current()->locks, &lock->elem, list_high_lock_priority, NULL);
+  list_push_back(&thread_current()->locks, &lock->elem);
 
   lock->holder = thread_current ();
 }
@@ -273,11 +273,19 @@ lock_release (struct lock *lock)
     list_sort(&t->locks, list_high_lock_priority, NULL);
     
     struct lock* l = list_entry(list_front(&t->locks), struct lock, elem);
-    t->priority = l->priority;
+    //t->priority = l->priority;
+    thread_set_virtual_priority(t, l->priority);
+  }
+  else
+  {
+   // t -> priority = t->old_priority;
+    thread_set_virtual_priority(t, t->old_priority);
   }
 
   if(t->old_priority > t->priority)
-    t->priority = t->old_priority;
+    thread_set_virtual_priority(t, t->old_priority);
+
+  
 
   /* Locks's priority is the highest of all the waiting threads*/
 
