@@ -362,13 +362,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
- // printf("OLD = %d,PRI = %d\n", thread_current()->old_priority, thread_current()->priority);
   // If no donation
   if(thread_current()->old_priority == thread_current()->priority)
     thread_current ()->priority = new_priority;
 
   thread_current()->old_priority = new_priority;
-  //printf("OLD = %d,PRI = %d\n", thread_current()->old_priority, thread_current()->priority);
+
   // If max priority in ready queue > reunning thread's priority, yield the currrent thread
   if(!list_empty(&ready_list))
   {
@@ -382,6 +381,11 @@ void
 thread_set_virtual_priority(struct thread* t, int new_priority)
 {
   t -> priority = new_priority;
+
+  // If old priority is greater than virtual priority, set the virtual priority as the old priority
+  if(t->old_priority > t->priority)
+    t-> priority = t-> old_priority;
+    
   if(t == thread_current() && !list_empty(&ready_list))
   {
     if(list_entry(list_front (&ready_list), struct thread, elem)->priority > new_priority)
@@ -390,6 +394,7 @@ thread_set_virtual_priority(struct thread* t, int new_priority)
       list_sort(&ready_list, list_high_priority, NULL);
   }
 }
+
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 

@@ -121,6 +121,7 @@ sema_up (struct semaphore *sema)
 
   if (!list_empty (&sema->waiters)) {
 
+    // Since priority may change during runtime, we need to sort again
     list_sort(&sema->waiters, list_high_priority, NULL);
     struct thread* t = list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem);
@@ -209,10 +210,12 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  // Assign the thread's priority to the lock as long as it is higher than that of the lock
   if(thread_current()->priority > lock->priority)
     lock->priority = thread_current()->priority;
   
 
+  // Donate the priority of waiting thread to the thread that holds the lock
   if(lock->holder != NULL)
   {
     if(thread_current()->priority > lock->holder->priority)
@@ -220,10 +223,7 @@ lock_acquire (struct lock *lock)
   }
 
   sema_down (&lock->semaphore);
-  /* Lock acquires maximum priority of the threads waiting on it. */
- // lock->donated_priority = list_entry(list_front(&(lock->semaphore).waiters), struct thread, elem)->virtual_priority;//Virtual priority
-  //if(lock->holder != thread_current())
-  //list_insert_ordered(&thread_current()->locks, &lock->elem, list_high_lock_priority, NULL);
+  
   list_push_back(&thread_current()->locks, &lock->elem);
 
   lock->holder = thread_current ();
@@ -266,29 +266,29 @@ lock_release (struct lock *lock)
 
   sema_up (&lock->semaphore);
 
+  // Remove lock from the thread's list of locks
   list_remove(&lock->elem);
 
   if(!list_empty(&t->locks))
   {
+    // Thread's virtual priority is the highest priority of the locks it has
     list_sort(&t->locks, list_high_lock_priority, NULL);
     
     struct lock* l = list_entry(list_front(&t->locks), struct lock, elem);
-    //t->priority = l->priority;
+  
     thread_set_virtual_priority(t, l->priority);
   }
   else
   {
-   // t -> priority = t->old_priority;
+    // If thread no longer has locks, return to the old priority
     thread_set_virtual_priority(t, t->old_priority);
   }
 
-  if(t->old_priority > t->priority)
-    thread_set_virtual_priority(t, t->old_priority);
-
-  
+  // If old priority is greater than virtual priority, set the virtual priority as the old priority
+  //if(t->old_priority > t->priority)
+    //thread_set_virtual_priority(t, t->old_priority);
 
   /* Locks's priority is the highest of all the waiting threads*/
-
   if(!list_empty(&lock->semaphore.waiters))
     lock->priority = list_entry (list_front (&lock->semaphore.waiters),
                                   struct thread, elem)->priority;
