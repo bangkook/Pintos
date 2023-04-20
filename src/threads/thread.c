@@ -222,9 +222,6 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  //if(t->priority > thread_current()->priority)
-  thread_yield();
-
   return tid;
 }
 
@@ -264,11 +261,9 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, list_high_priority, NULL);
   t->status = THREAD_READY;
-  //printf("ID: %d\n", thread_current()->priority);
-
+  
   if(thread_current() != idle_thread && t->priority > thread_current()->priority)
     thread_yield();
-  printf("CURRENT ID: %d\n", thread_current()->priority);
   intr_set_level (old_level);
   
 }
@@ -367,11 +362,17 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  printf("OLD = %d,PRI = %d\n", thread_current()->old_priority, thread_current()->priority);
+  // If no donation
+  if(thread_current()->old_priority == thread_current()->priority)
+    thread_current ()->priority = new_priority;
+
+  thread_current()->old_priority = new_priority;
+  //printf("OLD = %d,PRI = %d\n", thread_current()->old_priority, thread_current()->priority);
   // If max priority in ready queue > reunning thread's priority, yield the currrent thread
   if(!list_empty(&ready_list))
   {
-    if(list_entry(list_front (&ready_list), struct thread, elem)->priority > thread_current()->priority)
+    if(list_entry(list_front (&ready_list), struct thread, elem)->priority > new_priority)
       thread_yield();
   }
   
@@ -502,10 +503,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->virtual_priority = priority;
+  t->old_priority = priority;
   t->magic = THREAD_MAGIC;
   sema_init(&t->sema, 0);
-  //list_init(&t->locks);
+  list_init(&t->locks);
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -533,14 +534,15 @@ static struct thread *
 next_thread_to_run (void) 
 {
   //list_max (&ready_list, list_high_priority, NULL)
+  // printf("size = %d\n", list_empty(&ready_list));
   if (list_empty (&ready_list))
     return idle_thread;
   else
   {
    // struct list_elem* next = list_min (&ready_list, list_high_priority, NULL);
    // list_remove(next);
-   struct thread* t = list_entry (list_pop_front(&ready_list), struct thread, elem);
-   //printf("NEXT P: %d\n", t->priority);
+   //list_sort(&ready_list, list_high_priority, NULL);
+    struct thread* t = list_entry (list_pop_front(&ready_list), struct thread, elem);
     return t;
   }
 }
@@ -609,10 +611,10 @@ schedule (void)
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
 
+  
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
-  printf("PRI = %d %d\n", cur->priority, thread_current()->tid);
 }
 
 /* Returns a tid to use for a new thread. */
