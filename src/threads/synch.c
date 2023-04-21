@@ -73,7 +73,7 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_insert_ordered(&sema->waiters, &thread_current()->elem, list_high_priority, NULL);
-     // printf("sema down %d\n", thread_current()->priority); 
+    //  printf("sema down %d\n", sema->value); 
       thread_block ();
     }
   sema->value--;
@@ -130,6 +130,7 @@ sema_up (struct semaphore *sema)
                 
   }
   sema->value++;
+  // printf("sema up %d\n", sema->value); 
   intr_set_level (old_level);
 }
 
@@ -213,20 +214,36 @@ lock_acquire (struct lock *lock)
   // Assign the thread's priority to the lock as long as it is higher than that of the lock
   if(thread_current()->priority > lock->priority)
     lock->priority = thread_current()->priority;
-  
 
-  // Donate the priority of waiting thread to the thread that holds the lock
-  if(lock->holder != NULL)
-  {
-    if(thread_current()->priority > lock->holder->priority)
-      lock->holder->priority = thread_current()->priority;
+  // // Donate the priority of waiting thread to the thread that holds the lock
+  // if(lock->holder != NULL)
+  // {
+  //   if(thread_current()->priority > lock->holder->priority)
+  //     lock->holder->priority = thread_current()->priority;
+  // }
+
+  struct lock *curr_lock = lock;
+  struct thread *thread_holding_lock = lock->holder;
+  thread_current()->wait_on_lock = lock;
+
+  while(curr_lock != NULL && thread_holding_lock != NULL && thread_current()->priority > thread_holding_lock->priority){
+    // donate priority
+    thread_set_virtual_priority(thread_holding_lock, thread_current()->priority);
+    if(thread_current()->priority > thread_holding_lock->priority)
+      thread_holding_lock->priority = thread_current()->priority;
+
+    if(thread_current()->priority > curr_lock->priority)
+    curr_lock->priority = thread_current()->priority;
+
+    curr_lock = thread_holding_lock->wait_on_lock;
+    thread_holding_lock = curr_lock->holder;
   }
 
   sema_down (&lock->semaphore);
   
   list_push_back(&thread_current()->locks, &lock->elem);
-
   lock->holder = thread_current ();
+  // thread_current()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false

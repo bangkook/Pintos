@@ -99,8 +99,8 @@ struct thread
     struct semaphore sema;
     struct list_elem sleepelem;        /* List element for sleeping threads list*/
     int64_t wake_time;
-
-    struct list locks;
+    struct lock *wait_on_lock;          /* The lock that this thread is waiting for. */
+    struct list locks;                 /* List of locks acquired by the thread. */
     
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

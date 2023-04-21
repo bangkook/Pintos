@@ -368,7 +368,7 @@ thread_set_priority (int new_priority)
 
   thread_current()->old_priority = new_priority;
 
-  // If max priority in ready queue > reunning thread's priority, yield the currrent thread
+  // If max priority in ready queue > running thread's priority, yield the currrent thread
   if(!list_empty(&ready_list))
   {
     if(list_entry(list_front (&ready_list), struct thread, elem)->priority > new_priority)
