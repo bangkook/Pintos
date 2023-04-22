@@ -222,6 +222,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if(priority > thread_current()->priority)
+    thread_yield();
+    
   return tid;
 }
 
@@ -258,12 +261,11 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //list_push_back (&ready_list, &t->elem);
+
   list_insert_ordered(&ready_list, &t->elem, list_high_priority, NULL);
+
   t->status = THREAD_READY;
   
-  if(thread_current() != idle_thread && t->priority > thread_current()->priority)
-    thread_yield();
   intr_set_level (old_level);
   
 }
@@ -335,7 +337,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) 
     list_insert_ordered(&ready_list, &cur->elem, list_high_priority, NULL);
-    //list_push_back (&ready_list, &cur->elem);
+    
   cur->status = THREAD_READY;
   schedule();
   intr_set_level (old_level);
@@ -390,8 +392,6 @@ thread_set_virtual_priority(struct thread* t, int new_priority)
   {
     if(list_entry(list_front (&ready_list), struct thread, elem)->priority > new_priority)
       thread_yield();
-    else if(t->status == THREAD_READY)
-      list_sort(&ready_list, list_high_priority, NULL);
   }
 }
 
@@ -521,6 +521,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->old_priority = priority;
+  t->wait_on_lock = NULL;
   t->magic = THREAD_MAGIC;
   sema_init(&t->sema, 0);
   list_init(&t->locks);
@@ -550,15 +551,12 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  //list_max (&ready_list, list_high_priority, NULL)
-  // printf("size = %d\n", list_empty(&ready_list));
   if (list_empty (&ready_list))
     return idle_thread;
   else
   {
-   // struct list_elem* next = list_min (&ready_list, list_high_priority, NULL);
-   // list_remove(next);
-   //list_sort(&ready_list, list_high_priority, NULL);
+    // Since priority changes in runtime, we need to sort again
+    list_sort(&ready_list, list_high_priority, NULL);
     struct thread* t = list_entry (list_pop_front(&ready_list), struct thread, elem);
     return t;
   }
@@ -623,7 +621,7 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
- // printf("PRI = %d %d %d\n", next->tid);
+ 
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
