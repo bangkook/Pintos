@@ -73,7 +73,7 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_insert_ordered(&sema->waiters, &thread_current()->elem, list_high_priority, NULL);
-    //  printf("sema down %d\n", sema->value); 
+
       thread_block ();
     }
   sema->value--;
@@ -118,19 +118,21 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+  struct thread* t;
 
   if (!list_empty (&sema->waiters)) {
 
     // Since priority may change during runtime, we need to sort again
     list_sort(&sema->waiters, list_high_priority, NULL);
-    struct thread* t = list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem);
-    //printf("sema up%d\n", t->priority);                         
-    thread_unblock (t);         
-                
+    t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);                        
+    thread_unblock (t);      
   }
   sema->value++;
-  // printf("sema up %d\n", sema->value); 
+
+  if(t != NULL && t->priority > thread_current()->priority)
+    thread_yield();  
+
   intr_set_level (old_level);
 }
 
@@ -215,27 +217,19 @@ lock_acquire (struct lock *lock)
   if(thread_current()->priority > lock->priority)
     lock->priority = thread_current()->priority;
 
-  // // Donate the priority of waiting thread to the thread that holds the lock
-  // if(lock->holder != NULL)
-  // {
-  //   if(thread_current()->priority > lock->holder->priority)
-  //     lock->holder->priority = thread_current()->priority;
-  // }
-
   struct lock *curr_lock = lock;
   struct thread *thread_holding_lock = lock->holder;
   thread_current()->wait_on_lock = lock;
 
-  while(curr_lock != NULL && thread_holding_lock != NULL && thread_current()->priority > thread_holding_lock->priority){
+  while(!thread_mlfqs && thread_holding_lock != NULL && thread_current()->priority > thread_holding_lock->priority){
     // donate priority
     thread_set_virtual_priority(thread_holding_lock, thread_current()->priority);
-    if(thread_current()->priority > thread_holding_lock->priority)
-      thread_holding_lock->priority = thread_current()->priority;
 
     if(thread_current()->priority > curr_lock->priority)
-    curr_lock->priority = thread_current()->priority;
+      curr_lock->priority = thread_current()->priority;
 
     curr_lock = thread_holding_lock->wait_on_lock;
+    if(curr_lock == NULL) break;
     thread_holding_lock = curr_lock->holder;
   }
 
@@ -243,7 +237,7 @@ lock_acquire (struct lock *lock)
   
   list_push_back(&thread_current()->locks, &lock->elem);
   lock->holder = thread_current ();
-  // thread_current()->wait_on_lock = NULL;
+  thread_current ()->wait_on_lock = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -283,6 +277,8 @@ lock_release (struct lock *lock)
 
   sema_up (&lock->semaphore);
 
+  if(thread_mlfqs) return;
+  
   // Remove lock from the thread's list of locks
   list_remove(&lock->elem);
 
@@ -291,7 +287,7 @@ lock_release (struct lock *lock)
     // Thread's virtual priority is the highest priority of the locks it has
     list_sort(&t->locks, list_high_lock_priority, NULL);
     
-    struct lock* l = list_entry(list_front(&t->locks), struct lock, elem);
+    struct lock* l = list_entry(list_begin(&t->locks), struct lock, elem);
   
     thread_set_virtual_priority(t, l->priority);
   }
@@ -301,14 +297,11 @@ lock_release (struct lock *lock)
     thread_set_virtual_priority(t, t->old_priority);
   }
 
-  // If old priority is greater than virtual priority, set the virtual priority as the old priority
-  //if(t->old_priority > t->priority)
-    //thread_set_virtual_priority(t, t->old_priority);
-
   /* Locks's priority is the highest of all the waiting threads*/
   if(!list_empty(&lock->semaphore.waiters))
-    lock->priority = list_entry (list_front (&lock->semaphore.waiters),
+    lock->priority = list_entry (list_begin (&lock->semaphore.waiters),
                                   struct thread, elem)->priority;
+  else lock->priority = PRI_MIN;                         
                               
 }
 
