@@ -104,7 +104,11 @@ timer_sleep (int64_t ticks)
   t->wake_time = (start + ticks);
   list_insert_ordered(&sleeping_threads, &t->sleepelem, &list_less_comp, NULL);
   
-  sema_down(&t->sema);
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  
+  thread_block();
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -182,6 +186,9 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+
+  enum intr_level old_level;
+  
   /* Loop through sleeping threads and wake up those who reached their wake-up time*/
   struct list_elem* iter = list_begin(&sleeping_threads);
   
@@ -190,7 +197,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
     struct thread* t = list_entry(iter, struct thread, sleepelem);
     if (t->wake_time <= timer_ticks())
     {
-      sema_up(&t->sema);
+      old_level = intr_disable ();
+      thread_unblock(t);  
+      intr_set_level (old_level);
       iter = list_remove(iter);
     }
     else
