@@ -34,6 +34,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#define MAX_LEVEL 8
+
 bool list_high_priority_condition(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
@@ -118,10 +120,10 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  struct thread* t;
+  struct thread* t = NULL;
 
-  if (!list_empty (&sema->waiters)) {
-
+  if (!list_empty (&sema->waiters)) 
+  {
     // Since priority may change during runtime, we need to sort again
     list_sort(&sema->waiters, list_high_priority, NULL);
     t = list_entry (list_pop_front (&sema->waiters),
@@ -221,7 +223,10 @@ lock_acquire (struct lock *lock)
   struct thread *thread_holding_lock = lock->holder;
   thread_current()->wait_on_lock = lock;
 
-  while(!thread_mlfqs && thread_holding_lock != NULL && thread_current()->priority > thread_holding_lock->priority){
+  int level = 0;
+  while(!thread_mlfqs && thread_holding_lock != NULL && level < MAX_LEVEL 
+          && thread_current()->priority > thread_holding_lock->priority){
+
     // donate priority
     thread_set_virtual_priority(thread_holding_lock, thread_current()->priority);
 
@@ -231,6 +236,8 @@ lock_acquire (struct lock *lock)
     curr_lock = thread_holding_lock->wait_on_lock;
     if(curr_lock == NULL) break;
     thread_holding_lock = curr_lock->holder;
+
+    level++;
   }
 
   sema_down (&lock->semaphore);
