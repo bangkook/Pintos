@@ -95,6 +95,7 @@ In timer interrupt handler:
 - This design avoids race conditions by disabling interrupts before any operation that 
   involves global variables.
 
+
              PRIORITY SCHEDULING
              ===================
 
@@ -103,17 +104,114 @@ In timer interrupt handler:
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
-* In struct thread, we added
+
+* In struct semaphore:
+    - int priority --> holds the priority of the semaphore which is the 
+            priority of the waiting thread on that semaphore used in condition
+            variables to sema up higher priority semaphores first.
+            
+* In struct lock:
+    1. struct list_elem elem --> List element of the lock for the thread's
+            list of locks.
+    2. int priority --> holds the priority of the lock which is the 
+            highest donated priority of the waiting threads on that lock
+            used in multiple donation.
+
+* In struct thread:
     1.  int old_priority --> contains the original priority of thread 
                              before donation.
-    2. struct list_elem sleepelem --> List element in sleeping threads list
-    3. struct lock *wait_on_lock --> The lock that this thread is waiting for
-    4. In the struct lock{}; --> priority attribte is added to show the max priority
-       of the waiting threads
+    2. struct lock *wait_on_lock --> The lock that this thread is waiting for.
+            Used in nested donation to find out the next lock in the chain.
+    3. struct list locks --> List to keep a reference to the locks acquired 
+            by the thread sorted descendingly by the lock's priority. Used 
+            to set the thread's priority according to the locks it holds.
+            
+* In synch.c:
+    #define MAX_LEVEL 8 --> Maximum level of nested donation.
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+To track priority donation:
+* For each lock:
+    # int priority --> Each lock has its own priority which is the highest prioriy after
+            donation of the threads holding or waiting for that lock. Used in multiple donation
+            so that the thread holding the lock takes the same priority of the lock.
+           
+* For each thread:
+    # int priority --> Holds the thread's priority after donation.
+    # struct lock *wait_on_lock --> The lock that this thread is waiting for.
+            Used in nested donation to find out the next lock in the chain.
+    # struct list locks --> List to keep a reference to the locks acquired 
+            by the thread sorted descendingly by the lock's priority. Used 
+            to set the thread's priority according to the locks it holds.
+  
+ 
+ priority                                       100                     100                     150 
+                                --------------> L1     ---------------> L2     ---------------> L3
+                               /                |     /                 |     /                 |             
+                              /                 |    /                  |    /                  |
+                             /                  |   /                   |   /                   |
+                            /                   |  /                    |  /                    |
+                           /                    ↓ /                     ↓ /                     ↓
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     100                     150         After donation
+locks                   {}                      {L1}                    {L2}                    {L3}
+wait_on_lock            L1                      L2                      L3                      NULL
+
+
+**T4 releases L3
+
+priority                                       100                     100                     100 
+                                --------------> L1     ---------------> L2     <--------------- L3
+                               /                |     /                 |     /                              
+                              /                 |    /                  |    /                  
+                             /                  |   /                   |   /                   
+                            /                   |  /                    |  /                    
+                           /                    ↓ /                     ↓ ↙                     
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     100                     150         After donation
+locks                   {}                      {L1}                    {L2, L3}                 {}
+wait_on_lock            L1                      L2                      NULL                    NULL
+
+
+**T3 releases L2, L3
+
+priority                                       100                     100                      0 
+                                --------------> L1     <--------------- L2                      L3
+                               /                |     /                                   
+                              /                 |    /                      
+                             /                  |   /                      
+                            /                   |  /                      
+                           /                    ↓ ↙                      
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     10                      150         After donation
+locks                   {}                      {L1, L2}                {}                       {}
+wait_on_lock            L1                      NULL                   NULL                     NULL
+
+**T2 releases L1, L2
+
+priority                                       100                      0                      0 
+                                <-------------- L1                     L2                      L3
+                               /                                                        
+                              /                                       
+                             /                                        
+                            /                                         
+                           ↙                                          
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     50                      10                      150         After donation
+locks                   {L1}                    {}                      {}                       {}
+wait_on_lock            NULL                    NULL                   NULL                     NULL
+
 
 ---- ALGORITHMS ----
 
@@ -152,6 +250,15 @@ In timer interrupt handler:
 >> B6: Describe a potential race in thread_set_priority() and explain
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
+
+Priority changes in both thread_set_priority() and thread_set_virtual_priority()
+during priority donation. Alternating the sequence of both may cause different results.
+In addition, multiple locks may try to update thread's donated priority concurrently.
+
+It is avoided by disabling interrupts whenever priority is updated.
+
+A lock can be used on the priority variable of the thread. So all functions writing
+to that variable must first acquire the lock.
 
 ---- RATIONALE ----
 
