@@ -91,7 +91,6 @@ void Calculate_priority_all(void)
   }
 
   list_sort(&ready_list, list_high_priority, NULL);
-  // sort_thread_list (&ready_list);
 }
 
 void Calculate_recent_cpu_all(void)
@@ -638,9 +637,7 @@ next_thread_to_run(void)
     return idle_thread;
   else
   {
-    // Since priority changes in runtime, we need to sort again
-    struct thread *t = list_entry(list_pop_front(&ready_list), struct thread, elem);
-    return t;
+    return(list_entry(list_pop_front(&ready_list), struct thread, elem));
   }
 }
 
