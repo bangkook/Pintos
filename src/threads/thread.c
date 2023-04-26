@@ -224,6 +224,7 @@ void thread_tick(void)
 
   if (thread_mlfqs)
   {
+     if (t != idle_thread)
     thread_current()->recent_cpu.val = ADD_REAL_INT(thread_current()->recent_cpu.val, 1);
     if (timer_ticks() % TIMER_FREQ == 0)
     {
@@ -289,6 +290,7 @@ tid_t thread_create(const char *name, int priority,
       t->nice = thread_current()->nice;
       t->recent_cpu.val = thread_current()->recent_cpu.val;
       calculate_priority(t);
+      priority=t->priority;////////////////////////////////
     }
   }
 
