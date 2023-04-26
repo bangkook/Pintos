@@ -99,10 +99,9 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-    /* Semaphore for thread to wait on when it is sleeping */
-    struct semaphore sema;
     struct list_elem sleepelem;        /* List element for sleeping threads list*/
     int64_t wake_time;
+
     struct lock *wait_on_lock;          /* The lock that this thread is waiting for. */
     struct list locks;                 /* List of locks acquired by the thread. */
     
@@ -161,4 +160,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void calculate_priority(struct thread *cur);
+void Calculate_priority_all (void);
+void Calculate_recent_cpu_all (void);
+void Calculate_load_avg (void);
 #endif /* threads/thread.h */

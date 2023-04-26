@@ -63,7 +63,7 @@ bool thread_mlfqs;
 
 struct real load_avg;
 
-static void
+void
 calculate_priority(struct thread *cur)
 {  
   if (cur == idle_thread)
@@ -624,7 +624,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->old_priority = priority;
   t->wait_on_lock = NULL;
   t->magic = THREAD_MAGIC;
-  sema_init(&t->sema, 0);
   list_init(&t->locks);
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
