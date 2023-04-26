@@ -101,12 +101,12 @@ timer_sleep (int64_t ticks)
 
   ASSERT (intr_get_level () == INTR_ON);
   
+  // Disable interrupts
+  old_level = intr_disable ();
+
   struct thread *t = thread_current();
   t->wake_time = (start + ticks);
   list_insert_ordered(&sleeping_threads, &t->sleepelem, &list_less_comp, NULL);
-  
-  // Disable interrupts
-  old_level = intr_disable ();
   
   thread_block();
   intr_set_level (old_level);
