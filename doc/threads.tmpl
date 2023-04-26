@@ -8,11 +8,11 @@
 
 >> Fill in the names and email addresses of your group members.
 
-Eman Samir <emanooo@domain.example>
-Sara Gaballa <sarooo@domain.example>
+Eman Samir <eman.samir22.es@gmail.com>
+Sara Gaballa <saragaballa2002@gmail.com>
 Maria Bassem <maria.college2025@gmail.com>
 Mariam Hossam <m.hossam2551@gmail.com>
-Nisreen Hisham <nesooo@domain.example>
+Nisreen Hisham <nancyhisham2003@gmail.com>
 
 ---- PRELIMINARIES ----
 
@@ -119,14 +119,14 @@ In timer interrupt handler:
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
-- We used the "list_insert_ordered()" function to insert the threads in an ordered fashion
-  based on their priority [which is the donated priority, if there is donation].
-- list_sort() was used in next_thread_to_run() since the priority changes in runtime,
-  so we needed to sort again
-
+  The waiting threads are ordered descendingly based upon their priority using 
+  the "list_insert_ordered()" function to insert the threads
+  [which is the donated priority, if there is donation].
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
+
+  //
 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
@@ -152,6 +152,15 @@ In timer interrupt handler:
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+  1. struct real {
+      int val;
+    };
+    This is to be able to define load_avg, recent_cpu because they are real
+    numbers not integers.
+  2. In struct thread, we added 
+      int nice;
+      struct real recent_cpu;
+  3. struct real load_avg; ==> This is system-wide, so it is defined globally in thread.c 
 
 ---- ALGORITHMS ----
 
@@ -163,23 +172,39 @@ In timer interrupt handler:
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0      0   0   0   63 61  59      A
+ 4      4   0   0   62 61  59      A                     
+ 8      8   0   0   61 61  59      B
+12      8   4   0   61 60  59      A 
+16      12  4   0   60 60  59      B    
+20      12  8   0   60 59  59      A
+24      16  8   0   59 59  59      C
+28      16  8   4   59 59  58      B
+32      16  12  4   59 58  58      A
+36      20  12  4   58 58  58      C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
+  
+  The decision of which thread to execute when two or more have the same priority
+  is unclear. But according to the specification, the scheduler must proceed through
+  the threads in a "round robin" fashion if there are many threads with the same priority.
+  When a thread yield, it is reinserted after all other threads with
+  the same priority in the list of ready threads.
+
+
 
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+  The timer interrupt handler is where the majority of the scheduling work is completed.
+  In theads_ticks, the list that holds the next thread to run is updated in Calculate_priority_all 
+  and we recalculate the thread priorities, recent CPU values, and the load_avg.
+  Therefore, thread tick() contains the majority of the code.
+  The current thread priority is recalculated every fourth tick,
+  the system's load average and all threads priorities are recalculated every second. Like that, we 
+  try to make the thread_tick as fast and optimal as possible
 
 ---- RATIONALE ----
 
