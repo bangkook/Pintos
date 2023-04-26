@@ -108,7 +108,8 @@ In timer interrupt handler:
                              before donation.
     2. struct list_elem sleepelem --> List element in sleeping threads list
     3. struct lock *wait_on_lock --> The lock that this thread is waiting for
-
+    4. In the struct lock{}; --> priority attribte is added to show the max priority
+       of the waiting threads
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -126,10 +127,25 @@ In timer interrupt handler:
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
-  //
+  1. The current thread priority is compared to the locks' priority
+    ==> If the former is greater, the locks' priority is adjusted to be equal 
+    to the thread_current's.
+    ==> The priority of the lock is donated to the thread holding the lock
+    and all the locks that it is waiting on. That is to ensure that the high priority thread 
+    is served as soon as possible. [Nested Donation Handling]
+  2. The lock is added to the list of locks acquired by the current thread.
+     The lock holder becomes the current thread.
+     This process needs synchronization to avoid race conditions
 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+  
+  1. The lock->holder attribte is set to NULL.
+  2. Remove the lock from the list of locks of the thread.
+  3. Now, the virtual priority of the thread is set to be the highest priority of
+     the threads it has.
+  4. Change the priority of the block to become the priority of the
+     maximum thread waiting on the lock. [So this thread acquires the lock]. 
 
 ---- SYNCHRONIZATION ----
 
