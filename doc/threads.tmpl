@@ -8,9 +8,11 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eman Samir <emanooo@domain.example>
+Sara Gaballa <sarooo@domain.example>
+Maria Bassem <mariooo@domain.example>
+Mariam Hossam <m.hossam2551@gmail.com>
+Nisreen Hisham <nesooo@domain.example>
 
 ---- PRELIMINARIES ----
 
@@ -30,26 +32,68 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+* int64_t wake_time (struct thread): 
+            For keeping the ticks count when the thread should wake up if it is sleeping
+            
+* struct list sleeping_threads:
+            A list for storing threads that are put to sleep, sorted ascendingly by wake_time
+            
+* list_elem sleepelem (struct thread): 
+            List element for sleeping threads list
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+1. The current thread's wake_time is set to the current ticks plus the given sleep ticks.
+2. Disable interrupts
+3. Insert the thread into sleeping_threads list ordered ascendingly by wake_time
+4. Call thread_block() to block the current thread
+5. Re-enable interrupts and set it to the old level
+
+In timer interrupt handler:
+1. Iterate through sleeping_threads list
+2. If any thread's wake_time is smaller than or equal current ticks:
+     - Unblock it by invoking thread_unblock() on this thread.
+     - Remove it from the sleeping_threads list.
+3. If a thread is found whose wake_time is larger than the current ticks:
+     - Exit the loop
+
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+- The list keeping the sleeping threads is sorted ascendingly by wake_time
+  so when timer interrupt is invoked, it checks only first elements of the list
+  till the element's wake time is greater than the current ticks. Thus, we avoid
+  checking the remaining elements and reduce the time spent by this function.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+- Interrupts are disabled before inserting threads to the list or blocking them
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+- Current ticks and sleeping ticks are kept in local variables before disabling interrupts,
+  so wake_time value is not affected by race conditions.
+- All other operations are done when interrupts are disabled.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+- Keeping the sleeping threads in a list is reasonable to keep track of them and check
+  them on each tick.
+- This design ensures minimum time spent in interrupt handler since the list is sorted.
+- This design avoids race conditions by disabling interrupts before any operation that 
+  involves global variables.
 
              PRIORITY SCHEDULING
              ===================
