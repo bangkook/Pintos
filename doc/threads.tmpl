@@ -341,7 +341,23 @@ ticks   A   B   C   A   B   C   to run
 >> disadvantages in your design choices.  If you were to have extra
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
-  
+
+  We choose the running thread according to the recent_cpu value.
+  If the recent_cpu is large, the priority of this thread decreases. 
+  So starvation is avoided because when the priority decreases, the opportunity 
+  to choose this thread as running decreses. As the recent_cpu decay is inversely
+  proportional to the number of ready threads.
+
+  *Advantages: Our design is simple and readable. 
+              It is easy to understand and folw. 
+              Moreover, we don't calculate the load_avg and the 
+              recent_cpu for all threads every tick. However, it is calculated
+              every second. Therefore,, our design doesn't do overhead calculations. 
+  *Disadvantges: Most of our implementation is in the timer interrupt, namely "thread_tick()",
+                which is not very efficient because the timer_interrupt should be as fast and
+                optimal as possible. However,these updates (load_avg, recent_cpu, priority) 
+                should occur before any ordinary kernel thread has a chance to run,
+                so that the kernel thread doen't see old scheduler data values.
 
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
