@@ -10,7 +10,7 @@
 
 Eman Samir <emanooo@domain.example>
 Sara Gaballa <sarooo@domain.example>
-Maria Bassem <mariooo@domain.example>
+Maria Bassem <maria.college2025@gmail.com>
 Mariam Hossam <m.hossam2551@gmail.com>
 Nisreen Hisham <nesooo@domain.example>
 
@@ -103,6 +103,12 @@ In timer interrupt handler:
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+* In struct thread, we added
+    1.  int old_priority --> contains the original priority of thread 
+                             before donation.
+    2. struct list_elem sleepelem --> List element in sleeping threads list
+    3. struct lock *wait_on_lock --> The lock that this thread is waiting for
+
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -112,6 +118,12 @@ In timer interrupt handler:
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
+
+- We used the "list_insert_ordered()" function to insert the threads in an ordered fashion
+  based on their priority [which is the donated priority, if there is donation].
+- list_sort() was used in next_thread_to_run() since the priority changes in runtime,
+  so we needed to sort again
+
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
@@ -129,6 +141,8 @@ In timer interrupt handler:
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+  1. It is simple because by giving the lock the max priority of the waiting threads, 
+    we ensure that all the threads waiting on that lock 
 
               ADVANCED SCHEDULER
               ==================
