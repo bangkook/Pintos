@@ -405,6 +405,8 @@ void thread_exit(void)
   intr_disable();
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
+  if(thread_current()->parent != NULL)
+    sema_up(&thread_current()->parent->wait_child);
   schedule();
   NOT_REACHED();
 }
@@ -607,6 +609,9 @@ init_thread(struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->old_priority = priority;
   t->wait_on_lock = NULL;
+  sema_init(&t->wait_child, 0);
+  t->parent = NULL;
+  list_init(&t->children);
   t->magic = THREAD_MAGIC;
   list_init(&t->locks);
   old_level = intr_disable();

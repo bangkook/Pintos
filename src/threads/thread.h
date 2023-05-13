@@ -106,6 +106,12 @@ struct thread
     struct list locks;                 /* List of locks acquired by the thread. */
     
 
+   /*userprog data*/
+   struct semaphore wait_child;
+   struct thread *parent;
+   struct list children;
+   struct list_elem chile_elem;
+
    //advanced shedular
    int nice;
    struct real recent_cpu;
