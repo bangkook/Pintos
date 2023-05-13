@@ -95,6 +95,7 @@ In timer interrupt handler:
 - This design avoids race conditions by disabling interrupts before any operation that 
   involves global variables.
 
+
              PRIORITY SCHEDULING
              ===================
 
@@ -103,33 +104,147 @@ In timer interrupt handler:
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
-* In struct thread, we added
+
+* In struct semaphore:
+    - int priority --> holds the priority of the semaphore which is the 
+            priority of the waiting thread on that semaphore used in condition
+            variables to sema up higher priority semaphores first.
+            
+* In struct lock:
+    1. struct list_elem elem --> List element of the lock for the thread's
+            list of locks.
+    2. int priority --> holds the priority of the lock which is the 
+            highest donated priority of the waiting threads on that lock
+            used in multiple donation.
+
+* In struct thread:
     1.  int old_priority --> contains the original priority of thread 
                              before donation.
-    2. struct list_elem sleepelem --> List element in sleeping threads list
-    3. struct lock *wait_on_lock --> The lock that this thread is waiting for
+    2. struct lock *wait_on_lock --> The lock that this thread is waiting for.
+            Used in nested donation to find out the next lock in the chain.
+    3. struct list locks --> List to keep a reference to the locks acquired 
+            by the thread sorted descendingly by the lock's priority. Used 
+            to set the thread's priority according to the locks it holds.
+            
+* In synch.c:
+    #define MAX_LEVEL 8 --> Maximum level of nested donation.
 
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
 
+To track priority donation:
+* For each lock:
+    # int priority --> Each lock has its own priority which is the highest prioriy after
+            donation of the threads holding or waiting for that lock. Used in multiple donation
+            so that the thread holding the lock takes the same priority of the lock.
+           
+* For each thread:
+    # int priority --> Holds the thread's priority after donation.
+    # struct lock *wait_on_lock --> The lock that this thread is waiting for.
+            Used in nested donation to find out the next lock in the chain.
+    # struct list locks --> List to keep a reference to the locks acquired 
+            by the thread sorted descendingly by the lock's priority. Used 
+            to set the thread's priority according to the locks it holds.
+  
+ 
+ priority                                       100                     100                     150 
+                                --------------> L1     ---------------> L2     ---------------> L3
+                               /                |     /                 |     /                 |             
+                              /                 |    /                  |    /                  |
+                             /                  |   /                   |   /                   |
+                            /                   |  /                    |  /                    |
+                           /                    ↓ /                     ↓ /                     ↓
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     100                     150         After donation
+locks                   {}                      {L1}                    {L2}                    {L3}
+wait_on_lock            L1                      L2                      L3                      NULL
+
+
+**T4 releases L3
+
+priority                                       100                     100                     100 
+                                --------------> L1     ---------------> L2     <--------------- L3
+                               /                |     /                 |     /                              
+                              /                 |    /                  |    /                  
+                             /                  |   /                   |   /                   
+                            /                   |  /                    |  /                    
+                           /                    ↓ /                     ↓ ↙                     
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     100                     150         After donation
+locks                   {}                      {L1}                    {L2, L3}                 {}
+wait_on_lock            L1                      L2                      NULL                    NULL
+
+
+**T3 releases L2, L3
+
+priority                                       100                     100                      0 
+                                --------------> L1     <--------------- L2                      L3
+                               /                |     /                                   
+                              /                 |    /                      
+                             /                  |   /                      
+                            /                   |  /                      
+                           /                    ↓ ↙                      
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     100                     10                      150         After donation
+locks                   {}                      {L1, L2}                {}                       {}
+wait_on_lock            L1                      NULL                   NULL                     NULL
+
+**T2 releases L1, L2
+
+priority                                       100                      0                      0 
+                                <-------------- L1                     L2                      L3
+                               /                                                        
+                              /                                       
+                             /                                        
+                            /                                         
+                           ↙                                          
+                        T1                      T2                      T3                      T4
+
+old_priority            100                     50                      10                      150         Before donatation
+priority                100                     50                      10                      150         After donation
+locks                   {L1}                    {}                      {}                       {}
+wait_on_lock            NULL                    NULL                   NULL                     NULL
+
+
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
-  The waiting threads are ordered descendingly based upon their priority using 
-  the "list_insert_ordered()" function to insert the threads
-  [which is the donated priority, if there is donation].
+  The waiting threads are ordered descendingly based upon their priority
+  [which is the donated priority, if there is donation] using 
+  the "list_insert_ordered()" function to insert the threads.
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
-  //
+  1. The current thread priority is compared to the locks' priority
+    ==> If the former is greater, the locks' priority is adjusted to be equal 
+    to the thread_current's.
+    ==> The priority of the lock is donated to the thread holding the lock
+    and all the locks that it is waiting on. That is to ensure that the high priority thread 
+    is served as soon as possible. [Nested Donation Handling]
+  2. The lock is added to the list of locks acquired by the current thread.
+     The lock holder becomes the current thread.
+     This process needs synchronization to avoid race conditions.
 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+  
+  1. The lock->holder attribte is set to NULL.
+  2. Remove the lock from the list of locks of the thread.
+  3. Now, the virtual priority of the thread is set to be the highest priority of
+     the lock it has.
+  4. Change the priority of the lock to become the priority of the
+     maximum thread waiting on the lock. [So this thread acquires the lock]. 
 
 ---- SYNCHRONIZATION ----
 
@@ -137,12 +252,26 @@ In timer interrupt handler:
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+Priority changes in both thread_set_priority() and thread_set_virtual_priority()
+during priority donation. Alternating the sequence of both may cause different results.
+In addition, multiple locks may try to update thread's donated priority concurrently.
+
+It is avoided by disabling interrupts whenever priority is updated.
+
+A lock can be used on the priority variable of the thread. So all functions writing
+to that variable must first acquire the lock.
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
   1. It is simple because by giving the lock the max priority of the waiting threads, 
-    we ensure that all the threads waiting on that lock 
+    we ensure that the thread that has the lock has high priority so that other high priority 
+    threads can operate as soon as possible.
+  2. Having two values to store the priority made the work easier, because the virtual 
+    priority will be used in case of donation only and so after the donation the original priority 
+    will be restored easily. If this process was made using one priority attribute, it would have been  
+    difficult to handle.
 
               ADVANCED SCHEDULER
               ==================
@@ -213,12 +342,38 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+  We choose the running thread according to the recent_cpu value.
+  If the recent_cpu is large, the priority of this thread decreases. 
+  So starvation is avoided because when the priority decreases, the opportunity 
+  to choose this thread as running decreses. As the recent_cpu decay is inversely
+  proportional to the number of ready threads.
+
+  *Advantages: Our design is simple and readable. 
+              It is easy to understand and folw. 
+              Moreover, we don't calculate the load_avg and the 
+              recent_cpu for all threads every tick. However, it is calculated
+              every second. Therefore,, our design doesn't do overhead calculations. 
+  *Disadvantges: Most of our implementation is in the timer interrupt, namely "thread_tick()",
+                which is not very efficient because the timer_interrupt should be as fast and
+                optimal as possible. However,these updates (load_avg, recent_cpu, priority) 
+                should occur before any ordinary kernel thread has a chance to run,
+                so that the kernel thread doen't see old scheduler data values.
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+  In order to make fixed-point representation more readable, 
+  a struct with only an int value was employed. The 17.14 fixed-point
+  number representation was used to represent real numbers in a 32-bit integer.
+  The initial bit is for the sign, the subsequent 17 bits are for the whole-number,
+  and the final 14 bits are for the fraction. The maximum value of a number in the 
+  17.14 format is (2**31 - 1)/(2**14) = about 131,071.999. Thus, an integer x
+  represents the real number x/(2**14). The fixed-point.h file contains definitions
+  for real number operations as well as conversions between integer and real and vice versa.
 
                SURVEY QUESTIONS
                ================
