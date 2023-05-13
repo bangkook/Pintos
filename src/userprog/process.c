@@ -38,8 +38,11 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char* raw_file_name = file_name;
+  char* exec_name = strtok_r(raw_file_name, " ", &raw_file_name);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -88,7 +91,10 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  //return -1;
+  sema_down(&thread_current()->wait_child);
+  return 0;
+  
 }
 
 /* Free the current process's resources. */
@@ -195,7 +201,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -215,6 +221,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  char* raw_file_name = file_name;
+  char* exec_name = strtok_r(raw_file_name, " ", &raw_file_name);
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -222,7 +231,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (exec_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -302,7 +311,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, raw_file_name))
     goto done;
 
   /* Start address. */
@@ -424,10 +433,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void pass_arguments(int argc, char* argv[], void **esp){
+  //TO BE IMPLEMENTED
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *file_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -436,8 +449,21 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
         *esp = PHYS_BASE;
+        char *token;
+        char *rest = file_name;
+        int argc = 0;
+        while((token = strtok_r(rest, " ", &rest))) {
+          argc++;
+        }
+        rest = file_name;
+        char* argv[argc];
+        for(int i = 0; i < argc; i++) {
+          argv[i] = strtok_r(rest, " ", &rest);
+        }
+        pass_arguments(argc, argv, esp);
+      }
       else
         palloc_free_page (kpage);
     }
