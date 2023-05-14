@@ -433,8 +433,53 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
-static void pass_arguments(int argc, char* argv[], void **esp){
-  //TO BE IMPLEMENTED
+// Push executable name and arguments into stack
+static void push_arguments(int argc, char* argv[], void **esp){
+  int tot_length = 0;
+  char* args_ptr[argc];
+
+  // Write each argument in reverse order
+  for(int i = 0; i < argc; i++) {
+    int length = strlen(argv[i]) + 1;
+    *esp -= length;
+    memcpy(*esp, argv[i], length);
+
+    tot_length += length;
+    args_ptr[i] = *esp;
+  }
+
+  // Word align to 4 bytes
+  int word_align = tot_length % 4 == 0? 0 : 4 - tot_length % 4;
+  *esp -= word_align;
+  memset(*esp, 0, word_align);
+
+  // Write the last argument, consisting of 4 bytes of 0
+  *esp -= 4;
+  memset(*esp, 0, sizeof(char*));
+
+  // Write the address pointing to each of the arguments
+  for(int i = argc - 1; i >= 0; i--) {
+    *esp -= sizeof(char*);
+    memcpy(*esp, args_ptr[i], sizeof(char*));
+  }
+
+  // Write address of argv[0]
+  *esp -= sizeof(char**);
+  *((char**) *esp) = *esp + 4;
+ // memcpy(*esp, args_ptr, sizeof(char**));
+
+  // Write number of arguments argc
+  *esp -= sizeof(int);
+  *((int *) *esp) = argc;
+ // memcpy(*esp, argc, sizeof(int));
+
+  // Write NULL pointer as return address
+  *esp -= sizeof(void*);
+  memset(*esp, 0, sizeof(void*));
+
+  // Print stack to double check
+  hex_dump((uintptr_t)*esp, *esp, 12, true);
+
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
@@ -462,7 +507,7 @@ setup_stack (void **esp, char *file_name)
         for(int i = 0; i < argc; i++) {
           argv[i] = strtok_r(rest, " ", &rest);
         }
-        pass_arguments(argc, argv, esp);
+        push_arguments(argc, argv, esp);
       }
       else
         palloc_free_page (kpage);
