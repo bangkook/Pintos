@@ -404,9 +404,9 @@ void thread_exit(void)
      when it calls thread_schedule_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
-  thread_current()->status = THREAD_DYING;
   if(thread_current()->parent != NULL)
     sema_up(&thread_current()->parent->wait_child);
+  thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
 }
