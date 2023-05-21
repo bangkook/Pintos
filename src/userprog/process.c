@@ -92,7 +92,9 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   //return -1;
-  sema_down(&thread_current()->wait_child);
+  //sema_down(&thread_current()->wait_child);
+  while(true)
+    thread_yield();
   return 0;
   
 }
@@ -234,7 +236,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (exec_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", exec_name);
       goto done; 
     }
 
