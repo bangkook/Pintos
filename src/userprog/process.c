@@ -20,6 +20,8 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void
+push_arguments (const char* cmdline_tokens[], int argc, void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -56,7 +58,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
+  
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -92,9 +94,9 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   //return -1;
-  //sema_down(&thread_current()->wait_child);
-  while(true)
-    thread_yield();
+  sema_down(&thread_current()->wait_child);
+  //while(true)
+    //thread_yield();
   return 0;
   
 }
@@ -203,7 +205,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char *file_name);
+static bool setup_stack (void **esp, const char *file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -223,9 +225,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
-  char* raw_file_name = file_name;
-  char* exec_name = strtok_r(raw_file_name, " ", &raw_file_name);
-
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -233,10 +232,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (exec_name);
+  file = filesys_open (t->name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", exec_name);
+      printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
@@ -313,7 +312,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, raw_file_name))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -436,7 +435,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 // Push executable name and arguments into stack
-static void push_arguments(int argc, char* argv[], void **esp){
+static void
+push_arguments (const char* argv[], int argc, void **esp)
+{
+  ASSERT(argc >= 0);
+
   int tot_length = 0;
   char* args_ptr[argc];
 
@@ -460,34 +463,29 @@ static void push_arguments(int argc, char* argv[], void **esp){
   memset(*esp, 0, sizeof(char*));
 
   // Write the address pointing to each of the arguments
-  for(int i = argc - 1; i >= 0; i--) {
-    *esp -= sizeof(char*);
-    memcpy(*esp, args_ptr[i], sizeof(char*));
+  for (int i = argc - 1; i >= 0; i--) {
+    *esp -= 4;
+    *((void**) *esp) = args_ptr[i];
   }
 
   // Write address of argv[0]
   *esp -= sizeof(char**);
   *((char**) *esp) = *esp + 4;
- // memcpy(*esp, args_ptr, sizeof(char**));
 
   // Write number of arguments argc
   *esp -= sizeof(int);
   *((int *) *esp) = argc;
- // memcpy(*esp, argc, sizeof(int));
 
   // Write NULL pointer as return address
   *esp -= sizeof(void*);
   memset(*esp, 0, sizeof(void*));
 
-  // Print stack to double check
-  hex_dump((uintptr_t)*esp, *esp, 12, true);
-
+  hex_dump((uintptr_t)*esp, *esp, sizeof(char)*60, true);
 }
-
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, char *file_name) 
+setup_stack (void **esp, const char *file_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -498,18 +496,16 @@ setup_stack (void **esp, char *file_name)
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
         *esp = PHYS_BASE;
-        char *token;
-        char *rest = file_name;
         int argc = 0;
-        while((token = strtok_r(rest, " ", &rest))) {
-          argc++;
+        char* token;
+        char* save_ptr;
+        const char* argv[10];
+        for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
+            token = strtok_r(NULL, " ", &save_ptr))
+        {
+          argv[argc++] = token;
         }
-        rest = file_name;
-        char* argv[argc];
-        for(int i = 0; i < argc; i++) {
-          argv[i] = strtok_r(rest, " ", &rest);
-        }
-        push_arguments(argc, argv, esp);
+        push_arguments(argv, argc, esp);
       }
       else
         palloc_free_page (kpage);
