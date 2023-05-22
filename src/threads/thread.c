@@ -294,6 +294,9 @@ tid_t thread_create(const char *name, int priority,
     }
   }
 
+  /* Parent - child communication link. */
+  list_push_back(&thread_current()->children, &t->child_elem);
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
   kf->eip = NULL;
@@ -404,6 +407,7 @@ void thread_exit(void)
      when it calls thread_schedule_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
+  /* Wake up parent thread. */
   if(thread_current()->parent != NULL)
     sema_up(&thread_current()->parent->wait_child);
   thread_current()->status = THREAD_DYING;
