@@ -45,6 +45,7 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
+  // parent waits for child creation
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -118,6 +119,7 @@ process_wait (tid_t child_tid)
   if(child_thread == NULL){
     return -1; // pid does not refer to a direct child of the calling process.
   }
+  // Parent (thread wait on child) point to child
   /* A process waits for any given child at most once. So remove that child from the list*/
   list_remove(&child_thread->child_elem); 
   sema_down(&thread_current()->waiting_on_child);
@@ -343,6 +345,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+
+  file_deny_write(file);
 
  done:
   /* We arrive here whether the load is successful or not. */

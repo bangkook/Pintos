@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "process.h"
+#include "threads/vaddr.h"
 
 typedef int pid_t;
 
@@ -39,16 +40,21 @@ sys_wait(pid_t pid){
   return process_wait(pid);
 }
 
+static void validate_pointer(const void* vaddr) {
+  if(!is_user_vaddr(vaddr))
+    sys_exit(-1);
+}
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  //printf("syscall : %d\n",*(uint32_t *)(f->esp));
-  //hex_dump(f->esp, f->esp, 100, 1);
-  // TODO : check if f-> is bad pointer
+
+  for(int i = 0; i < 4; i++) {
+    validate_pointer(f->esp + i);
+  }
 
   int sys_code = *(int *)f->esp;
 
-  switch (*(uint32_t *)(f->esp))
+  switch (sys_code)
   {
   case SYS_HALT:
     /* code */
@@ -56,37 +62,48 @@ syscall_handler (struct intr_frame *f UNUSED)
   
   case SYS_EXIT:
   {
+    validate_pointer(f->esp + 4);
     int status = *((uint32_t *)f->esp + 1);
     sys_exit(status);
     break;
   }
   case SYS_EXEC:
+    validate_pointer(f->esp + 4);
     break;
 
   case SYS_WAIT:
   {
+    validate_pointer(f->esp + 4);
     int pid = *((int*)f->esp + 1);
     f->eax = sys_wait(pid);
     break;
   }
 
   case SYS_CREATE:
+    validate_pointer(f->esp + 4);
+    validate_pointer(f->esp + 8);
     break;
 
   case SYS_REMOVE:
+    validate_pointer(f->esp + 4);
     break;
 
   case SYS_OPEN:
+    validate_pointer(f->esp + 4);
     break;
 
   case SYS_FILESIZE:
+    validate_pointer(f->esp + 4);
     break;
 
   case SYS_READ:
+    //validate_pointer(f->esp + 4);
     break;
 
   case SYS_WRITE:
   {
+    validate_pointer(f->esp + 16);
+
     int fd = *((int*)f->esp + 1);
     void* buffer = (void*)(*((int*)f->esp + 2));
     unsigned size = *((unsigned*)f->esp + 3);
@@ -96,15 +113,19 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
   case SYS_SEEK:
+  validate_pointer(f->esp + 4);
     break;
 
   case SYS_TELL:
+  validate_pointer(f->esp + 4);
     break;
 
   case SYS_CLOSE:
+    validate_pointer(f->esp + 4);
     break;
     
   default:
+  validate_pointer(f->esp + 4);
     break;
   }
 

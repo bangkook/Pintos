@@ -1,3 +1,5 @@
+static void sys_exit(int status);
+
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
