@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 
 typedef int pid_t;
+static struct lock files_sync_lock;
 
 static void syscall_handler (struct intr_frame *);
 
@@ -33,6 +34,29 @@ sys_exit(int status) {
   //thread_current()->exit_status = status;
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
+}
+
+static int
+sys_exec(const char *cmd){
+
+  struct thread *cur = thread_current ();
+
+  if (!cmd )
+    return -1;
+  
+  if (!is_valid_vaddr (cmd)) 
+    return -1;
+  
+  if( pagedir_get_page (cur->pagedir, cmd) == NULL)
+    return -1;
+
+  lock_acquire(&files_sync_lock);
+	pid_t child_tid = process_execute(cmd);
+  lock_release(&files_sync_lock);
+	return child_tid;
+
+
+
 }
 
 static int
@@ -68,12 +92,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
   case SYS_EXEC:
-    validate_pointer(f->esp + 4);
     break;
 
   case SYS_WAIT:
   {
-    validate_pointer(f->esp + 4);
     int pid = *((int*)f->esp + 1);
     f->eax = sys_wait(pid);
     break;
