@@ -4,6 +4,9 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "process.h"
+
+typedef int pid_t;
 
 static void syscall_handler (struct intr_frame *);
 
@@ -15,32 +18,37 @@ syscall_init (void)
 
 static int
 write(int fd, const void* buffer, unsigned size) {
+  //printf("%d\n", fd);
   if(fd == 1) {
     putbuf(buffer, size);
+    //printf("size: %d\n", size);
+    return size;
   }
   return -1;
 }
 
 static void
 sys_exit(int status) {
-  thread_current()->exit_status = status;
-  printf("%s: exit(%d)", thread_current()->name, status);
+  //thread_current()->exit_status = status;
+  printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }
 
-int wait(pid_t pid){
+static int
+sys_wait(pid_t pid){
   return process_wait(pid);
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  //printf ("system call!\n");
+  //printf("syscall : %d\n",*(uint32_t *)(f->esp));
+  //hex_dump(f->esp, f->esp, 100, 1);
   // TODO : check if f-> is bad pointer
 
   int sys_code = *(int *)f->esp;
 
-  switch (sys_code)
+  switch (*(uint32_t *)(f->esp))
   {
   case SYS_HALT:
     /* code */
@@ -48,7 +56,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   
   case SYS_EXIT:
   {
-    int status = *((int*)f->esp + 1);
+    int status = *((uint32_t *)f->esp + 1);
     sys_exit(status);
     break;
   }
@@ -58,7 +66,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_WAIT:
   {
     int pid = *((int*)f->esp + 1);
-    f->eax = wait((pid_t) pid);
+    f->eax = sys_wait(pid);
     break;
   }
 
@@ -100,5 +108,5 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
 
-  thread_exit ();
+  //thread_exit ();
 }
