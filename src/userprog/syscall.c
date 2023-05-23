@@ -23,9 +23,15 @@ write(int fd, const void* buffer, unsigned size) {
 
 static void
 sys_exit(int status) {
+  thread_current()->exit_status = status;
   printf("%s: exit(%d)", thread_current()->name, status);
   thread_exit();
 }
+
+int wait(pid_t pid){
+  return process_wait(pid);
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -50,7 +56,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
 
   case SYS_WAIT:
+  {
+    int pid = *((int*)f->esp + 1);
+    f->eax = wait((pid_t) pid);
     break;
+  }
 
   case SYS_CREATE:
     break;

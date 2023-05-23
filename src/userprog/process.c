@@ -90,15 +90,34 @@ start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+  //  Waits for a child process pid and retrieves the child's exit status.
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  //return -1;
-  sema_down(&thread_current()->wait_child);
+  struct thread *child_thread = NULL;
+  struct list_elem *tmp = list_begin(&thread_current()->children);
+  if(list_empty(&thread_current()->children)){
+    return -1; // no child to wait for
+  }
+  while(tmp != list_end(&thread_current()->children)){
+    struct thread *c = list_entry(tmp,struct thread, child_elem);
+    if(c->tid == child_tid){
+      child_thread = c;
+      break;
+    }
+    tmp = list_next(tmp);
+  }
+
+  if(child_thread == NULL){
+    return -1; // pid does not refer to a direct child of the calling process.
+  }
+  /* A process waits for any given child at most once. So remove that child from the list*/
+  list_remove(&child_thread->child_elem); 
+  sema_down(&thread_current()->waiting_on_child);
   //while(true)
     //thread_yield();
-  return 0;
-  
+  // return 0;
+  return child_thread->exit_status;
 }
 
 /* Free the current process's resources. */

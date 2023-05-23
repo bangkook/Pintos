@@ -296,6 +296,8 @@ tid_t thread_create(const char *name, int priority,
 
   /* Parent - child communication link. */
   list_push_back(&thread_current()->children, &t->child_elem);
+  t->parent = thread_current();
+
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
@@ -409,7 +411,7 @@ void thread_exit(void)
   list_remove(&thread_current()->allelem);
   /* Wake up parent thread. */
   if(thread_current()->parent != NULL)
-    sema_up(&thread_current()->parent->wait_child);
+    sema_up(&thread_current()->parent->waiting_on_child);
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -613,7 +615,7 @@ init_thread(struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->old_priority = priority;
   t->wait_on_lock = NULL;
-  sema_init(&t->wait_child, 0);
+  sema_init(&t->waiting_on_child, 0);
   t->parent = NULL;
   list_init(&t->children);
   t->magic = THREAD_MAGIC;
