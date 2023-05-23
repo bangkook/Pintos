@@ -65,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   case SYS_WAIT:
   {
-    int pid = *((int*)f->esp + 1);
+    pid_t pid = *((int*)f->esp + 1);
     f->eax = sys_wait(pid);
     break;
   }
