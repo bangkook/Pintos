@@ -101,11 +101,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
- /* struct thread *child_thread = NULL;
-  struct list_elem *tmp = list_begin(&thread_current()->children);
+  struct thread *child_thread = NULL;
   if(list_empty(&thread_current()->children)){
     return -1; // no child to wait for
   }
+  struct list_elem *tmp = list_begin(&thread_current()->children);
   while(tmp != list_end(&thread_current()->children)){
     struct thread *c = list_entry(tmp,struct thread, child_elem);
     if(c->tid == child_tid){
@@ -119,10 +119,10 @@ process_wait (tid_t child_tid)
     return -1; // pid does not refer to a direct child of the calling process.
   }
   /* A process waits for any given child at most once. So remove that child from the list*/
- // list_remove(&child_thread->child_elem); 
+  list_remove(&child_thread->child_elem); 
   sema_down(&thread_current()->waiting_on_child);
-  return -1;
-  //return child_thread->exit_status;
+  //return -1;
+  return child_thread->exit_status;
 }
 
 /* Free the current process's resources. */
