@@ -44,7 +44,7 @@ sys_exec(const char *cmd){
   if (!cmd )
     return -1;
   
-  if (!is_valid_vaddr (cmd)) 
+  if (!is_user_vaddr (cmd)) 
     return -1;
   
   if( pagedir_get_page (cur->pagedir, cmd) == NULL)
@@ -54,8 +54,6 @@ sys_exec(const char *cmd){
 	pid_t child_tid = process_execute(cmd);
   lock_release(&files_sync_lock);
 	return child_tid;
-
-
 
 }
 
@@ -96,6 +94,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   case SYS_WAIT:
   {
+    validate_pointer(f->esp + 4);
     int pid = *((int*)f->esp + 1);
     f->eax = sys_wait(pid);
     break;
@@ -119,12 +118,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
 
   case SYS_READ:
-    //validate_pointer(f->esp + 4);
+    validate_pointer(f->esp + 4);
     break;
 
   case SYS_WRITE:
   {
-    validate_pointer(f->esp + 16);
+    validate_pointer(f->esp + 12);
 
     int fd = *((int*)f->esp + 1);
     void* buffer = (void*)(*((int*)f->esp + 2));
@@ -135,11 +134,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
   case SYS_SEEK:
-  validate_pointer(f->esp + 4);
+   validate_pointer(f->esp + 4);
     break;
 
   case SYS_TELL:
-  validate_pointer(f->esp + 4);
+   validate_pointer(f->esp + 4);
     break;
 
   case SYS_CLOSE:
@@ -147,7 +146,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
     
   default:
-  validate_pointer(f->esp + 4);
     break;
   }
 
