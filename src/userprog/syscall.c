@@ -25,7 +25,7 @@ void
 syscall_init (void) 
 {
   lock_init(&files_sync_lock);
-  
+
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -62,10 +62,20 @@ sys_remove(const char *file_name){
 
 static int
 write(int fd, const void* buffer, unsigned size) {
-  if(size == 0){
+  lock_acquire(&files_sync_lock);
+  if(size == 0 || buffer == NULL){
+    lock_release(&files_sync_lock);
     return 0;
   }
-  lock_acquire(&files_sync_lock);
+  
+  // Validate buffer  
+  for (unsigned i = 0; i < size; i++) {
+    if (((char*)buffer)[i] == '\0') {
+        lock_release(&files_sync_lock);
+        return -1;  // Invalid buffer                 
+    }
+  }
+
   //printf("%d\n", fd);
   if(fd == 1) { // writes to the console
     putbuf(buffer, size);
@@ -95,7 +105,7 @@ write(int fd, const void* buffer, unsigned size) {
 
   lock_release(&files_sync_lock);
   if (size == 0) return 0;
-else return -1;
+  else return -1;
 }
 
 
@@ -229,9 +239,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_WRITE:
   {
     validate_pointer(f->esp + 12);
-
+    validate_pointer(f->esp + 8);
+    validate_pointer(f->esp + 4);
+    
     int fd = *((int*)f->esp + 1);
     void* buffer = (void*)(*((int*)f->esp + 2));
+
     unsigned size = *((unsigned*)f->esp + 3);
 
     f->eax = write(fd, buffer, size);
