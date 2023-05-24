@@ -25,6 +25,7 @@ void
 syscall_init (void) 
 {
   lock_init(&files_sync_lock);
+  
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -61,9 +62,11 @@ sys_remove(const char *file_name){
 
 static int
 write(int fd, const void* buffer, unsigned size) {
+  if(size == 0){
+    return 0;
+  }
   lock_acquire(&files_sync_lock);
   //printf("%d\n", fd);
-
   if(fd == 1) { // writes to the console
     putbuf(buffer, size);
     lock_release(&files_sync_lock);
@@ -76,24 +79,32 @@ write(int fd, const void* buffer, unsigned size) {
     return 0;
   }
 
-  struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
-  while(tmp != list_end(&thread_current()->file_descriptors)){
-    struct open_file *t = list_entry(tmp, struct open_file, file_elem);
+  // struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
+  // while(tmp != list_end(&thread_current()->file_descriptors)){
+  struct list_elem *temp;
+  for (temp = list_front(&thread_current()->file_descriptors); temp != NULL; temp = temp->next){
+    struct open_file *t = list_entry(temp, struct open_file, file_elem);
       if (t->fd == fd)
       {
         int bytes_written = (int) file_write(t->file_ptr, buffer, size);
         lock_release(&files_sync_lock);
         return bytes_written;
       }
-    tmp = list_next(tmp);
+    // tmp = list_next(tmp);
   }
 
   lock_release(&files_sync_lock);
-  return 0;
+  if (size == 0) return 0;
+else return -1;
 }
+
 
 static int open (const char *file){
   lock_acquire(&files_sync_lock);
+  if(file == NULL){
+    lock_release(&files_sync_lock);
+    sys_exit(-1);
+  }
   struct file* myFile_ptr = filesys_open(file);
   if(myFile_ptr == NULL){
     lock_release(&files_sync_lock);
@@ -106,6 +117,7 @@ static int open (const char *file){
   new_file->fd = fd;
   list_push_front(&thread_current ()->file_descriptors, &new_file->file_elem);
   lock_release(&files_sync_lock);
+  return fd;
 }
 
 static void
@@ -200,8 +212,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   case SYS_OPEN:{
     validate_pointer(f->esp + 4);
-    // char* file = (char*) (*((int*)f->esp + 1));
-    // f->eax = open(file);
+    char* file = (char*) (*((int*)f->esp + 1));
+    f->eax = open(file);
     break;
   }
     
