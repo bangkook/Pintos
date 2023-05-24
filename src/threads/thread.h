@@ -113,8 +113,6 @@ struct thread
    struct list_elem child_elem;
    struct semaphore waiting_on_child;  /* Make parent wait on a child process */
    struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
-   uint32_t *pagedir;                  /* Page directory. */
-   
    
    //advanced shedular
    int nice;
@@ -122,7 +120,7 @@ struct thread
    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-   //  uint32_t *pagedir;                  /* Page directory. */
+   uint32_t *pagedir;                  /* Page directory. */
 #endif
 
     /* Owned by thread.c. */

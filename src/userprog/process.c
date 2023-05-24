@@ -76,18 +76,18 @@ start_process (void *file_name_)
   
   if (success) {
     push_arguments(file_name, &if_.esp);
-    if(thread_current()->parent!=NULL){
+    /*if(thread_current()->parent!=NULL){
       list_push_back(&thread_current()->parent->children, &thread_current()->child_elem);
       sema_up(&thread_current()->parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
-    }
+    }*/
   }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     {
-      sema_up(&thread_current()->parent->parent_child_sync);
+      //sema_up(&thread_current()->parent->parent_child_sync);
       thread_exit ();
     }
 
@@ -114,7 +114,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *child_thread = NULL;
+  /*struct thread *child_thread = NULL;
   if(list_empty(&thread_current()->children)){
     return -1; // no child to wait for
   }
@@ -133,10 +133,10 @@ process_wait (tid_t child_tid)
   }
   // Parent (thread wait on child) point to child
   /* A process waits for any given child at most once. So remove that child from the list*/
-  list_remove(&child_thread->child_elem); 
   sema_down(&thread_current()->waiting_on_child);
-  //return -1;
-  return child_thread->exit_status;
+  //list_remove(&child_thread->child_elem); 
+  return -1;
+  //return child_thread->exit_status;
 }
 
 /* Free the current process's resources. */

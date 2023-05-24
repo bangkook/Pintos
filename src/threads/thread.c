@@ -296,7 +296,7 @@ tid_t thread_create(const char *name, int priority,
 
   /* Parent - child communication link. */
   t->parent = thread_current();
-  sema_down(&t->parent->parent_child_sync);
+  //sema_down(&t->parent->parent_child_sync);
 
 
   /* Stack frame for kernel_thread(). */
@@ -400,13 +400,14 @@ void thread_exit(void)
 {
   ASSERT(!intr_context());
 
-#ifdef USERPROG
-  process_exit();
-#endif
 
-  /* Wake up parent thread. */
+#ifdef USERPROG
+/* Wake up parent thread. */
   if(thread_current()->parent != NULL)
     sema_up(&thread_current()->parent->waiting_on_child);
+  
+  process_exit();
+#endif
     
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -618,10 +619,11 @@ init_thread(struct thread *t, const char *name, int priority)
   t->old_priority = priority;
   t->wait_on_lock = NULL;
   sema_init(&t->waiting_on_child, 0);
+  sema_init(&t->parent_child_sync, 1);
   t->parent = NULL;
   list_init(&t->children);
-  t->magic = THREAD_MAGIC;
   list_init(&t->locks);
+  t->magic = THREAD_MAGIC;
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
