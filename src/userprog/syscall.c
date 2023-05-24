@@ -6,6 +6,8 @@
 #include "threads/thread.h"
 #include "process.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "filesys/filesys.h"
 
 typedef int pid_t;
 static struct lock files_sync_lock;
@@ -29,6 +31,31 @@ syscall_init (void)
 static void
 halt() {
   shutdown_power_off();
+}
+
+bool
+sys_create (const char *file_name, unsigned size)
+{
+  bool status;
+  if(file_name==NULL){
+    sys_exit(-1);
+  }
+  lock_acquire (&files_sync_lock);
+  status = filesys_create(file_name, size);  
+  lock_release (&files_sync_lock);
+  return status;
+}
+
+bool
+sys_remove(const char *file_name){
+  bool status;
+  if(file_name==NULL){
+    sys_exit(-1);
+  }
+  lock_acquire (&files_sync_lock);
+  status = filesys_remove(file_name);  
+  lock_release (&files_sync_lock);
+  return status;
 }
 
 
@@ -65,21 +92,21 @@ write(int fd, const void* buffer, unsigned size) {
   return 0;
 }
 
-// static int open (const char *file){
-//   lock_acquire(&files_sync_lock);
-//   struct file* myFile_ptr = filesys_open(file);
-//   if(myFile_ptr == NULL){
-//     lock_release(&files_sync_lock);
-//     return -1;
-//   }
-//   struct open_file* new_file = malloc(sizeof(struct open_file));
-//   new_file->file_ptr = myFile_ptr;
-//   int fd = thread_current()->fd_count;
-//   thread_current()->fd_count += 1;
-//   new_file->fd = fd;
-//   list_push_front(&thread_current ()->file_descriptors, &new_file->file_elem);
-//   lock_release(&files_sync_lock);
-// }
+static int open (const char *file){
+  lock_acquire(&files_sync_lock);
+  struct file* myFile_ptr = filesys_open(file);
+  if(myFile_ptr == NULL){
+    lock_release(&files_sync_lock);
+    return -1;
+  }
+  struct open_file* new_file = malloc(sizeof(struct open_file));
+  new_file->file_ptr = myFile_ptr;
+  int fd = thread_current()->fd_count;
+  thread_current()->fd_count += 1;
+  new_file->fd = fd;
+  list_push_front(&thread_current ()->file_descriptors, &new_file->file_elem);
+  lock_release(&files_sync_lock);
+}
 
 static void
 sys_exit(int status) {
@@ -133,8 +160,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch (sys_code)
   {
   case SYS_HALT:
-    
-    break;
+    {
+      halt();
+      break;
+    }
   
   case SYS_EXIT:
   {
@@ -161,13 +190,22 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   case SYS_CREATE:
+    {
     validate_pointer(f->esp + 4);
     validate_pointer(f->esp + 8);
+    char* file=(char*)(*((int*)f->esp + 1));
+    unsigned size = *((int*)f->esp + 2);
+    f->eax=sys_create(file,size);
     break;
+  }
 
   case SYS_REMOVE:
-    validate_pointer(f->esp + 4);
-    break;
+    {
+      validate_pointer(f->esp + 4);
+      char* file=(char*)(*((int*)f->esp + 1));
+      f->eax=sys_remove(file);
+      break;
+    }
 
   case SYS_OPEN:{
     validate_pointer(f->esp + 4);
