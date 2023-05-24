@@ -18,6 +18,11 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+static void
+halt() {
+  shutdown_power_off();
+}
+
 static int
 write(int fd, const void* buffer, unsigned size) {
   //printf("%d\n", fd);
@@ -39,7 +44,7 @@ sys_exit(int status) {
 static int
 sys_exec(const char *cmd){
 
-  struct thread *cur = thread_current ();
+  /*struct thread *cur = thread_current ();
 
   if (!cmd )
     return -1;
@@ -47,15 +52,15 @@ sys_exec(const char *cmd){
   if (!is_user_vaddr (cmd)) 
     return -1;
   
-   void * phys_page_ptr = pagedir_get_page(thread_current()->pagedir, cmd);
+  void * phys_page_ptr = pagedir_get_page(thread_current()->pagedir, cmd);
   if( phys_page_ptr == NULL)
     return -1;
-
+  
   lock_acquire(&files_sync_lock);
 	pid_t child_tid = process_execute(cmd);
   lock_release(&files_sync_lock);
-	return child_tid;
-  //return process_execute(cmd);
+	return child_tid;*/
+  return process_execute(cmd);
 
 }
 
@@ -81,7 +86,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch (sys_code)
   {
   case SYS_HALT:
-    /* code */
+    
     break;
   
   case SYS_EXIT:
@@ -154,6 +159,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
     
   default:
+    sys_exit(-1);
     break;
   }
 

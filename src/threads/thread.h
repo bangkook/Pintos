@@ -104,15 +104,6 @@ struct thread
 
     struct lock *wait_on_lock;          /* The lock that this thread is waiting for. */
     struct list locks;                 /* List of locks acquired by the thread. */
-    
-
-   /*userprog data*/
-   struct thread *parent;
-   struct list children;
-   int exit_status;               /* Has the exit status of the thread*/
-   struct list_elem child_elem;
-   struct semaphore waiting_on_child;  /* Make parent wait on a child process */
-   struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
    
    //advanced shedular
    int nice;
@@ -121,6 +112,14 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
    uint32_t *pagedir;                  /* Page directory. */
+   /*userprog data*/
+   struct thread *parent;
+   tid_t waiting_on;
+   struct list children;
+   int exit_status;               /* Has the exit status of the thread*/
+   struct list_elem child_elem;
+   struct semaphore waiting_on_child;  /* Make parent wait on a child process */
+   struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
 #endif
 
     /* Owned by thread.c. */

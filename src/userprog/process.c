@@ -49,6 +49,8 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
+  sema_down(&thread_current()->parent_child_sync);
+  //printf("3\n");
   // parent waits for child creation
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -76,18 +78,23 @@ start_process (void *file_name_)
   
   if (success) {
     push_arguments(file_name, &if_.esp);
-    /*if(thread_current()->parent!=NULL){
+    //thread_current()->exit_status = thread_current()->name;
+    if(thread_current()->parent != NULL){ 
       list_push_back(&thread_current()->parent->children, &thread_current()->child_elem);
       sema_up(&thread_current()->parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
-    }*/
+      //printf("2\n");
+    }
   }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     {
-      //sema_up(&thread_current()->parent->parent_child_sync);
+      thread_current()->exit_status = -1;
+      if(thread_current()->parent != NULL){
+        sema_up(&thread_current()->parent->parent_child_sync);
+      }
       thread_exit ();
     }
 
@@ -114,7 +121,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  /*struct thread *child_thread = NULL;
+  struct thread *child_thread = NULL;
   if(list_empty(&thread_current()->children)){
     return -1; // no child to wait for
   }
@@ -132,11 +139,14 @@ process_wait (tid_t child_tid)
     return -1; // pid does not refer to a direct child of the calling process.
   }
   // Parent (thread wait on child) point to child
+  thread_current()->waiting_on = child_tid;
+  //int status = child_thread->exit_status;
   /* A process waits for any given child at most once. So remove that child from the list*/
-  sema_down(&thread_current()->waiting_on_child);
-  //list_remove(&child_thread->child_elem); 
-  return -1;
-  //return child_thread->exit_status;
+  sema_up(&child_thread->parent_child_sync);
+  list_remove(&child_thread->child_elem);
+  sema_down(&thread_current()->waiting_on_child); 
+  //return -1;
+  return child_thread->exit_status;
 }
 
 /* Free the current process's resources. */
@@ -162,6 +172,24 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  /* Wake up parent thread. */
+  struct thread *parent = thread_current()->parent;
+  if(parent != NULL && parent->waiting_on == thread_tid()){
+    // TODO : SET EXIT STATUTS IN PARENT
+    parent->waiting_on = -1;
+    sema_up(&parent->waiting_on_child);
+  } else if(parent != NULL){
+    list_remove(&thread_current()->child_elem);
+  }
+
+  // Wake up all children
+  struct list_elem *iter = list_begin(&thread_current()->children);
+  while(iter != list_end(&thread_current()->children)){
+    struct thread *c = list_entry(iter, struct thread, child_elem);
+    sema_up(&c->parent_child_sync);
+    iter = list_next(iter);
+  }
+
 }
 
 /* Sets up the CPU for running user code in the current

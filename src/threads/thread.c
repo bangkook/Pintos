@@ -294,10 +294,12 @@ tid_t thread_create(const char *name, int priority,
     }
   }
 
+  #ifdef USERPROG
   /* Parent - child communication link. */
   t->parent = thread_current();
-  //sema_down(&t->parent->parent_child_sync);
-
+  //list_push_back(&thread_current()->children, &t->child_elem);
+  //sema_down(&thread_current()->parent_child_sync);
+  #endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
@@ -402,10 +404,7 @@ void thread_exit(void)
 
 
 #ifdef USERPROG
-/* Wake up parent thread. */
-  if(thread_current()->parent != NULL)
-    sema_up(&thread_current()->parent->waiting_on_child);
-  
+
   process_exit();
 #endif
     
@@ -618,11 +617,15 @@ init_thread(struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->old_priority = priority;
   t->wait_on_lock = NULL;
+  list_init(&t->locks);
+
+#ifdef USERPROG
   sema_init(&t->waiting_on_child, 0);
-  sema_init(&t->parent_child_sync, 1);
+  sema_init(&t->parent_child_sync, 0);
   t->parent = NULL;
   list_init(&t->children);
-  list_init(&t->locks);
+#endif
+
   t->magic = THREAD_MAGIC;
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
