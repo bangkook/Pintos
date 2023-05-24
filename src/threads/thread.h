@@ -116,8 +116,9 @@ struct thread
    struct thread *parent;
    tid_t waiting_on;
    struct list children;
-   int exit_status;  
-   int child_status;               /* Has the exit status of the thread*/
+   int exit_status;                    /* Has the exit status of the thread*/
+   int child_status;               
+   bool child_success;
    struct list_elem child_elem;
    struct list file_descriptors;      /* List of file descriptors held to this thread. */
    struct semaphore waiting_on_child;  /* Make parent wait on a child process */
