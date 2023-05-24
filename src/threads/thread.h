@@ -119,8 +119,10 @@ struct thread
    int exit_status;  
    int child_status;               /* Has the exit status of the thread*/
    struct list_elem child_elem;
+   struct list file_descriptors;      /* List of file descriptors held to this thread. */
    struct semaphore waiting_on_child;  /* Make parent wait on a child process */
    struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
+   int fd_count;                     /* count the number of the file descriptors held by this thread. */
 #endif
 
     /* Owned by thread.c. */

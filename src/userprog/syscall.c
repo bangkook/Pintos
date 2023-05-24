@@ -12,9 +12,17 @@ static struct lock files_sync_lock;
 
 static void syscall_handler (struct intr_frame *);
 
+struct open_file
+{
+    struct list_elem file_elem;
+    struct file *file_ptr;
+    int fd;
+};
+
 void
 syscall_init (void) 
 {
+  lock_init(&files_sync_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -23,16 +31,55 @@ halt() {
   shutdown_power_off();
 }
 
+
 static int
 write(int fd, const void* buffer, unsigned size) {
+  lock_acquire(&files_sync_lock);
   //printf("%d\n", fd);
-  if(fd == 1) {
+
+  if(fd == 1) { // writes to the console
     putbuf(buffer, size);
+    lock_release(&files_sync_lock);
     //printf("size: %d\n", size);
     return size;
   }
-  return -1;
+  else if(fd == 0 || list_empty(&thread_current()->file_descriptors)){
+    lock_release(&files_sync_lock);
+    //printf("size: %d\n", size);
+    return 0;
+  }
+
+  struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
+  while(tmp != list_end(&thread_current()->file_descriptors)){
+    struct open_file *t = list_entry(tmp, struct open_file, file_elem);
+      if (t->fd == fd)
+      {
+        int bytes_written = (int) file_write(t->file_ptr, buffer, size);
+        lock_release(&files_sync_lock);
+        return bytes_written;
+      }
+    tmp = list_next(tmp);
+  }
+
+  lock_release(&files_sync_lock);
+  return 0;
 }
+
+// static int open (const char *file){
+//   lock_acquire(&files_sync_lock);
+//   struct file* myFile_ptr = filesys_open(file);
+//   if(myFile_ptr == NULL){
+//     lock_release(&files_sync_lock);
+//     return -1;
+//   }
+//   struct open_file* new_file = malloc(sizeof(struct open_file));
+//   new_file->file_ptr = myFile_ptr;
+//   int fd = thread_current()->fd_count;
+//   thread_current()->fd_count += 1;
+//   new_file->fd = fd;
+//   list_push_front(&thread_current ()->file_descriptors, &new_file->file_elem);
+//   lock_release(&files_sync_lock);
+// }
 
 static void
 sys_exit(int status) {
@@ -122,9 +169,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     validate_pointer(f->esp + 4);
     break;
 
-  case SYS_OPEN:
+  case SYS_OPEN:{
     validate_pointer(f->esp + 4);
+    // char* file = (char*) (*((int*)f->esp + 1));
+    // f->eax = open(file);
     break;
+  }
+    
 
   case SYS_FILESIZE:
     validate_pointer(f->esp + 4);
