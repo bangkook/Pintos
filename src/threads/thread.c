@@ -618,6 +618,7 @@ init_thread(struct thread *t, const char *name, int priority)
   t->old_priority = priority;
   t->wait_on_lock = NULL;
   list_init(&t->locks);
+  
 
 #ifdef USERPROG
   sema_init(&t->waiting_on_child, 0);
@@ -627,6 +628,7 @@ init_thread(struct thread *t, const char *name, int priority)
   t->exit_status = -1;
   t->child_status = -1;
   t->waiting_on = -1;
+  list_init(&t->file_descriptors);
 #endif
 
   t->magic = THREAD_MAGIC;
