@@ -295,8 +295,8 @@ tid_t thread_create(const char *name, int priority,
   }
 
   /* Parent - child communication link. */
-  list_push_back(&thread_current()->children, &t->child_elem);
   t->parent = thread_current();
+  sema_down(&t->parent->parent_child_sync);
 
 
   /* Stack frame for kernel_thread(). */

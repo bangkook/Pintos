@@ -43,6 +43,10 @@ process_execute (const char *file_name)
   char exec_name[256]; // 4KB
   parse_filename(file_name, exec_name);
 
+  if(exec_name[0]=='\0'){
+    return -1;
+  }
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
   // parent waits for child creation
@@ -72,12 +76,20 @@ start_process (void *file_name_)
   
   if (success) {
     push_arguments(file_name, &if_.esp);
+    if(thread_current()->parent!=NULL){
+      list_push_back(&thread_current()->parent->children, &thread_current()->child_elem);
+      sema_up(&thread_current()->parent->parent_child_sync);
+      sema_down(&thread_current()->parent_child_sync);
+    }
   }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-    thread_exit ();
+    {
+      sema_up(&thread_current()->parent->parent_child_sync);
+      thread_exit ();
+    }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
