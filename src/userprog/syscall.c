@@ -47,7 +47,8 @@ sys_exec(const char *cmd){
   if (!is_user_vaddr (cmd)) 
     return -1;
   
-  if( pagedir_get_page (cur->pagedir, cmd) == NULL)
+   void * phys_page_ptr = pagedir_get_page(thread_current()->pagedir, cmd);
+  if( phys_page_ptr == NULL)
     return -1;
 
   lock_acquire(&files_sync_lock);
