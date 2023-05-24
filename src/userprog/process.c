@@ -140,13 +140,12 @@ process_wait (tid_t child_tid)
   }
   // Parent (thread wait on child) point to child
   thread_current()->waiting_on = child_tid;
-  //int status = child_thread->exit_status;
   /* A process waits for any given child at most once. So remove that child from the list*/
   sema_up(&child_thread->parent_child_sync);
   list_remove(&child_thread->child_elem);
   sema_down(&thread_current()->waiting_on_child); 
   //return -1;
-  return child_thread->exit_status;
+  return thread_current()->child_status;
 }
 
 /* Free the current process's resources. */
@@ -176,9 +175,11 @@ process_exit (void)
   struct thread *parent = thread_current()->parent;
   if(parent != NULL && parent->waiting_on == thread_tid()){
     // TODO : SET EXIT STATUTS IN PARENT
+    parent->child_status = thread_current()->exit_status;
     parent->waiting_on = -1;
     sema_up(&parent->waiting_on_child);
   } else if(parent != NULL){
+    parent->child_status = -1;
     list_remove(&thread_current()->child_elem);
   }
 
