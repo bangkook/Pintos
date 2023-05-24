@@ -117,25 +117,16 @@ sys_exit(int status) {
 
 static int
 sys_exec(const char *cmd){
-
-  /*struct thread *cur = thread_current ();
-
-  if (!cmd )
-    return -1;
+  struct thread *cur = thread_current ();
   
-  if (!is_user_vaddr (cmd)) 
-    return -1;
-  
-  void * phys_page_ptr = pagedir_get_page(thread_current()->pagedir, cmd);
+  void * phys_page_ptr = (void *) pagedir_get_page(thread_current()->pagedir, (const void*)cmd);
   if( phys_page_ptr == NULL)
     return -1;
   
   lock_acquire(&files_sync_lock);
 	pid_t child_tid = process_execute(cmd);
   lock_release(&files_sync_lock);
-	return child_tid;*/
-  return process_execute(cmd);
-
+	return child_tid;
 }
 
 static int

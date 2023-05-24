@@ -49,9 +49,12 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
-  sema_down(&thread_current()->parent_child_sync);
-  //printf("3\n");
+
   // parent waits for child creation
+  sema_down(&thread_current()->parent_child_sync);
+  if(!thread_current()->child_success)
+    return -1;
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -78,12 +81,11 @@ start_process (void *file_name_)
   
   if (success) {
     push_arguments(file_name, &if_.esp);
-    //thread_current()->exit_status = thread_current()->name;
     if(thread_current()->parent != NULL){ 
+      thread_current()->parent->child_success = true;
       list_push_back(&thread_current()->parent->children, &thread_current()->child_elem);
       sema_up(&thread_current()->parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
-      //printf("2\n");
     }
   }
 
@@ -93,6 +95,7 @@ start_process (void *file_name_)
     {
       thread_current()->exit_status = -1;
       if(thread_current()->parent != NULL){
+        thread_current()->parent->child_success = false;
         sema_up(&thread_current()->parent->parent_child_sync);
       }
       thread_exit ();
@@ -174,11 +177,10 @@ process_exit (void)
   /* Wake up parent thread. */
   struct thread *parent = thread_current()->parent;
   if(parent != NULL && parent->waiting_on == thread_tid()){
-    // TODO : SET EXIT STATUTS IN PARENT
     parent->child_status = thread_current()->exit_status;
     parent->waiting_on = -1;
     sema_up(&parent->waiting_on_child);
-  } else if(parent != NULL){
+  } else if(parent != NULL && !list_empty(&parent->children)) {
     parent->child_status = -1;
     list_remove(&thread_current()->child_elem);
   }
