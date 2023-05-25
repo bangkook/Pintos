@@ -168,13 +168,22 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
   case SYS_SEEK:
+    {
     validate_pointer(f->esp + 4);
+    validate_pointer(f->esp + 8);
+    int fd = *((int*)f->esp + 1);
+    unsigned position = *((unsigned*)f->esp + 2);
+    seek(fd, position);
     break;
+  }
 
   case SYS_TELL:
+  {
     validate_pointer(f->esp + 4);
+    int fd = *((int*)f->esp + 1);
+    f->eax = tell(fd);
     break;
-
+  }
   case SYS_CLOSE:
    {
     validate_pointer(f->esp + 4);
@@ -400,6 +409,58 @@ filesize (int fd)
   return -1;
 }
 
+void 
+seek (int fd, unsigned position){
+  lock_acquire(&files_sync_lock);
+  // If there are no file_descriptors list, error
+  if (list_empty(&thread_current()->file_descriptors))
+  {
+    lock_release(&files_sync_lock);
+    return;
+  }
+  // loop to check if the given fd is in our list of file descriptors
+  struct list_elem *temp = list_begin(&thread_current()->file_descriptors);
+  while(temp != list_end(&thread_current()->file_descriptors)){
+    struct open_file *t = list_entry(temp, struct open_file, file_elem);
+      if (t->fd == fd)
+      {
+        file_seek(t->file_ptr, position);
+        lock_release(&files_sync_lock);
+        return;
+      }
+  }
+  lock_release(&files_sync_lock);
+  return;
+}
+
+unsigned 
+tell (int fd){
+  unsigned pos = 0;
+  lock_acquire(&files_sync_lock);
+  // If there are no file_descriptors list, error
+  if (list_empty(&thread_current()->file_descriptors))
+  {
+    lock_release(&files_sync_lock);
+    return -1;
+  }
+  // loop to check if the given fd is in our list of file descriptors
+  struct list_elem *temp = list_begin(&thread_current()->file_descriptors);
+  while(temp != list_end(&thread_current()->file_descriptors)){
+    struct open_file *t = list_entry(temp, struct open_file, file_elem);
+      if (t->fd == fd)
+      {
+        pos = (unsigned) file_tell(t->file_ptr);
+        lock_release(&files_sync_lock);
+        return pos;
+      }
+    temp = list_next(temp);
+  }
+
+  lock_release(&files_sync_lock);
+  return -1;
+}
+
+
 void
 exit(int status) {
   thread_current()->exit_status = status;
@@ -415,7 +476,7 @@ exit(int status) {
   thread_exit();
 }
 
-int
+pid_t
 exec(const char *cmd){
   struct thread *cur = thread_current ();
   
