@@ -206,9 +206,7 @@ bool
 create (const char *file_name, unsigned size)
 {
   bool status;
-  // if(file_name==NULL){
-  //   sys_exit(-1);
-  // }
+
   lock_acquire (&files_sync_lock);
   status = filesys_create(file_name, size);  
   lock_release (&files_sync_lock);
@@ -218,9 +216,7 @@ create (const char *file_name, unsigned size)
 bool
 remove(const char *file_name){
   bool status;
-  // if(file_name==NULL){
-  //   sys_exit(-1);
-  // }
+
   lock_acquire (&files_sync_lock);
   status = filesys_remove(file_name);  
   lock_release (&files_sync_lock);
@@ -231,34 +227,17 @@ remove(const char *file_name){
 int
 write(int fd, const void* buffer, unsigned size) {
   lock_acquire(&files_sync_lock);
-  // if(size == 0 || buffer == NULL){
-  //   lock_release(&files_sync_lock);
-  //   return 0;
-  // }
-  
-  // // Validate buffer  
-  // for (unsigned i = 0; i < size; i++) {
-  //   if (((char*)buffer)[i] == '\0') {
-  //       lock_release(&files_sync_lock);
-  //       return -1;  // Invalid buffer                 
-  //   }
-  // }
 
-  //printf("%d\n", fd);
   if(fd == 1) { // writes to the console
     putbuf(buffer, size);
     lock_release(&files_sync_lock);
-    //printf("size: %d\n", size);
     return size;
-  }
-  else if(fd == 0 || list_empty(&thread_current()->file_descriptors)){
+
+  } else if(fd == 0 || list_empty(&thread_current()->file_descriptors)) {
     lock_release(&files_sync_lock);
-    //printf("size: %d\n", size);
     return 0;
   }
 
-  // struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
-  // while(tmp != list_end(&thread_current()->file_descriptors)){
   struct list_elem *temp;
   for (temp = list_front(&thread_current()->file_descriptors); temp != NULL; temp = temp->next){
     struct open_file *t = list_entry(temp, struct open_file, file_elem);
@@ -268,7 +247,6 @@ write(int fd, const void* buffer, unsigned size) {
         lock_release(&files_sync_lock);
         return bytes_written;
       }
-    // tmp = list_next(tmp);
   }
 
   lock_release(&files_sync_lock);
@@ -280,14 +258,6 @@ int
 read (int fd, void *buffer, unsigned size)
 {
 
-  // validate_buffer(buffer,size);
-  // if(buffer == NULL){
-  //   sys_exit(-1);
-  // }
-  // void * phys_page_ptr = (void *) pagedir_get_page(thread_current()->pagedir, (const void*)buffer);
-  // if( phys_page_ptr == NULL)
-  //   sys_exit(-1);
-
   lock_acquire(&files_sync_lock);
   if(size == 0){
     lock_release(&files_sync_lock);
@@ -296,8 +266,9 @@ read (int fd, void *buffer, unsigned size)
 
   if (fd == 0)
   {
+    int c = (int) input_getc();
     lock_release(&files_sync_lock);
-    return (int) input_getc();
+    return c;
   }
 
   if (fd == 1 || list_empty(&thread_current()->file_descriptors))
@@ -306,7 +277,7 @@ read (int fd, void *buffer, unsigned size)
     return 0;//-1
   }
 
-    struct list_elem *e;
+  struct list_elem *e;
   struct open_file *t = NULL;
   for (e = list_begin(&thread_current()->file_descriptors);
        e != list_end(&thread_current()->file_descriptors);
@@ -333,20 +304,23 @@ read (int fd, void *buffer, unsigned size)
 int 
 open (const char *file){
   lock_acquire(&files_sync_lock);
-  // if(file == NULL){
-  //   lock_release(&files_sync_lock);
-  //   sys_exit(-1);
-  // }
+
   struct file* myFile_ptr = filesys_open(file);
   if(myFile_ptr == NULL){
     lock_release(&files_sync_lock);
     return -1;
   }
+
   struct open_file* new_file = malloc(sizeof(struct open_file));
   new_file->file_ptr = myFile_ptr;
   int fd = thread_current()->fd_count;
   thread_current()->fd_count += 1;
   new_file->fd = fd;
+
+  // If currently running, deny write
+  if(strcmp(thread_current()->name, file) == 0)
+    file_deny_write(myFile_ptr);
+
   list_push_front(&thread_current ()->file_descriptors, &new_file->file_elem);
   lock_release(&files_sync_lock);
   return fd;
@@ -465,7 +439,6 @@ void
 exit(int status) {
   thread_current()->exit_status = status;
 
-  //mariam edit it if you want
   struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
   while(tmp != list_end(&thread_current()->file_descriptors)){
     struct open_file *t = list_entry(tmp, struct open_file, file_elem);
