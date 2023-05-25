@@ -434,12 +434,16 @@ tell (int fd){
 void
 exit(int status) {
   thread_current()->exit_status = status;
-
   struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
-  while(tmp != list_end(&thread_current()->file_descriptors)){
-    struct open_file *t = list_entry(tmp, struct open_file, file_elem);
+  struct list_elem *next = NULL;
+  struct open_file *t;
+  while(!list_empty(&thread_current()->file_descriptors)){
+    next = list_next(tmp);
+    t = list_entry(tmp, struct open_file, file_elem);
+    list_remove(tmp);
     file_close(t->file_ptr);
-    tmp = list_next(tmp);
+    free(t);
+    tmp = next;
   }
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();

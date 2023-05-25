@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -22,7 +23,14 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void push_arguments (const char* file_name, void **esp);
 void parse_filename(char *src, char *dest);
+void free_resources();
 
+struct open_file
+{
+    struct list_elem file_elem;
+    struct file *file_ptr;
+    int fd;
+};
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -58,6 +66,21 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
+}
+
+void free_resources() {
+  // Free all resources
+  struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
+  struct list_elem *next = NULL;
+  struct open_file *t;
+  while(!list_empty(&thread_current()->file_descriptors)){
+    next = list_next(tmp);
+    t = list_entry(tmp, struct open_file, file_elem);
+    list_remove(tmp);
+    file_close(t->file_ptr);
+    free(t);
+    tmp = next;
+  }
 }
 
 /* A thread function that loads a user process and starts it
@@ -98,7 +121,7 @@ start_process (void *file_name_)
         thread_current()->parent->child_success = false;
         sema_up(&thread_current()->parent->parent_child_sync);
       }
-      thread_exit ();
+      thread_exit();
     }
 
   /* Start the user process by simulating a return from an
@@ -141,13 +164,13 @@ process_wait (tid_t child_tid)
   if(child_thread == NULL){
     return -1; // pid does not refer to a direct child of the calling process.
   }
-  // Parent (thread wait on child) point to child
+
+  // Parent is waiting on this child
   thread_current()->waiting_on = child_tid;
-  /* A process waits for any given child at most once. So remove that child from the list*/
   sema_up(&child_thread->parent_child_sync);
+  /* A process waits for any given child at most once. So remove that child from the list*/
   list_remove(&child_thread->child_elem);
   sema_down(&thread_current()->waiting_on_child); 
-  //return -1;
   return thread_current()->child_status;
 }
 
@@ -174,7 +197,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  /* Wake up parent thread. */
+  /* If exiting thread is the child -> Wake up parent thread. */
   struct thread *parent = thread_current()->parent;
   if(parent != NULL && parent->waiting_on == thread_tid()){
     parent->child_status = thread_current()->exit_status;
@@ -185,14 +208,14 @@ process_exit (void)
     list_remove(&thread_current()->child_elem);
   }
 
-  // Wake up all children
+  // If exiting thread is the parent -> Wake up all children
   struct list_elem *iter = list_begin(&thread_current()->children);
   while(iter != list_end(&thread_current()->children)){
     struct thread *c = list_entry(iter, struct thread, child_elem);
     sema_up(&c->parent_child_sync);
-    iter = list_next(iter);
+    iter = list_remove(iter);
   }
-
+  free_resources();
 }
 
 /* Sets up the CPU for running user code in the current
