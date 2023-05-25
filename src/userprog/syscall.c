@@ -8,9 +8,24 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 
 typedef int pid_t;
 static struct lock files_sync_lock;
+
+void halt (void);
+void exit (int status);
+pid_t exec (const char *cmd_lime);
+int wait (pid_t pid);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file);
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
 
 static void syscall_handler (struct intr_frame *);
 
@@ -29,10 +44,9 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-
-static void validate_pointer(const void* vaddr) {
+void validate_pointer(const void* vaddr) {
   if(!is_user_vaddr(vaddr)|| vaddr == NULL || vaddr < (void *) 0x08048000)
-    sys_exit(-1);
+    exit(-1);
 }
 
 void validate_buffer (void *buffer, unsigned size)
@@ -47,12 +61,140 @@ void validate_buffer (void *buffer, unsigned size)
 }
 
 static void
+syscall_handler (struct intr_frame *f UNUSED) 
+{
+
+  validate_pointer(f->esp);
+
+  int sys_code = *(int *)f->esp;
+
+  switch (sys_code)
+  {
+  case SYS_HALT:
+    {
+      halt();
+      break;
+    }
+  
+  case SYS_EXIT:
+  {
+    validate_pointer(f->esp + 4);
+    int status = *((uint32_t *)f->esp + 1);
+    exit(status);
+    break;
+  }
+  case SYS_EXEC:
+  {
+    validate_pointer(f->esp + 4);
+    char* cmd = (char*)(*((int*)f->esp + 1));
+    f->eax = exec (cmd);
+    break;
+  }
+
+  case SYS_WAIT:
+  {
+    validate_pointer(f->esp + 4);
+    int pid = *((int*)f->esp + 1);
+    f->eax = wait(pid);
+    break;
+  }
+
+  case SYS_CREATE:
+    {
+    validate_pointer(f->esp + 4);
+    validate_pointer(f->esp + 8);
+    char* file = (char*) (*((int*)f->esp + 1));
+    unsigned size = *((int*)f->esp + 2);
+    if(file == NULL) exit(-1);
+    f->eax = create(file, size);
+    break;
+  }
+
+  case SYS_REMOVE:
+    {
+      validate_pointer(f->esp + 4);
+      char* file = (char*) (*((int*)f->esp + 1));
+      if(file == NULL) exit(-1);
+      f->eax = remove(file);
+      break;
+    }
+
+  case SYS_OPEN:{
+    validate_pointer(f->esp + 4);
+    char* file = (char*) (*((int*)f->esp + 1));
+    if(file == NULL) exit(-1);
+    f->eax = open(file);
+    break;
+  }
+    
+
+  case SYS_FILESIZE:
+  {
+    validate_pointer(f->esp + 4);
+    int fd = *((int*)f->esp + 1);
+    f->eax = filesize(fd);
+    break;
+  }
+
+  case SYS_READ:
+    {
+    validate_pointer(f->esp + 12);
+    validate_pointer(f->esp + 8);
+    validate_pointer(f->esp + 4);
+    
+    int fd = *((int*)f->esp + 1);
+    void* buffer = (void*)(*((int*)f->esp + 2));
+
+    unsigned size = *((unsigned*)f->esp + 3);
+    validate_buffer(buffer,size);
+    f->eax = read(fd, buffer, size);
+
+    break;
+  }
+
+  case SYS_WRITE:
+  {
+    validate_pointer(f->esp + 12);
+    validate_pointer(f->esp + 8);
+    validate_pointer(f->esp + 4);
+    
+    int fd = *((int*)f->esp + 1);
+    void* buffer = (void*)(*((int*)f->esp + 2));
+
+    unsigned size = *((unsigned*)f->esp + 3);
+    validate_buffer(buffer,size);
+    f->eax = write(fd, buffer, size);
+
+    break;
+  }
+  case SYS_SEEK:
+    validate_pointer(f->esp + 4);
+    break;
+
+  case SYS_TELL:
+    validate_pointer(f->esp + 4);
+    break;
+
+  case SYS_CLOSE:
+   {
+    validate_pointer(f->esp + 4);
+    close(*((int*)f->esp + 1));
+    break;
+    }
+    
+  default:
+    exit(-1);
+    break;
+  }
+}
+
+void
 halt() {
   shutdown_power_off();
 }
 
 bool
-sys_create (const char *file_name, unsigned size)
+create (const char *file_name, unsigned size)
 {
   bool status;
   // if(file_name==NULL){
@@ -65,7 +207,7 @@ sys_create (const char *file_name, unsigned size)
 }
 
 bool
-sys_remove(const char *file_name){
+remove(const char *file_name){
   bool status;
   // if(file_name==NULL){
   //   sys_exit(-1);
@@ -77,8 +219,8 @@ sys_remove(const char *file_name){
 }
 
 
-static int
-sys_write(int fd, const void* buffer, unsigned size) {
+int
+write(int fd, const void* buffer, unsigned size) {
   lock_acquire(&files_sync_lock);
   // if(size == 0 || buffer == NULL){
   //   lock_release(&files_sync_lock);
@@ -125,7 +267,8 @@ sys_write(int fd, const void* buffer, unsigned size) {
   else return -1;
 }
 
-static int sys_read (int fd, void *buffer, unsigned size)
+int 
+read (int fd, void *buffer, unsigned size)
 {
 
   // validate_buffer(buffer,size);
@@ -178,7 +321,8 @@ static int sys_read (int fd, void *buffer, unsigned size)
 }
 
 
-static int sys_open (const char *file){
+int 
+open (const char *file){
   lock_acquire(&files_sync_lock);
   // if(file == NULL){
   //   lock_release(&files_sync_lock);
@@ -199,8 +343,8 @@ static int sys_open (const char *file){
   return fd;
 }
 
-static void 
-sys_close (int fd)
+void 
+close (int fd)
 {
   
   lock_acquire(&files_sync_lock);
@@ -229,8 +373,8 @@ sys_close (int fd)
   return;
 }
 
-static int 
-sys_filesize (int fd)
+int 
+filesize (int fd)
 {
   lock_acquire(&files_sync_lock);
 
@@ -256,27 +400,23 @@ sys_filesize (int fd)
   return -1;
 }
 
-static void
-sys_exit(int status) {
+void
+exit(int status) {
   thread_current()->exit_status = status;
 
   //mariam edit it if you want
   struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
-  lock_acquire(&files_sync_lock);
   while(tmp != list_end(&thread_current()->file_descriptors)){
     struct open_file *t = list_entry(tmp, struct open_file, file_elem);
-        file_close(t->file_ptr);
-        list_remove(&t->file_elem);
-        
+    file_close(t->file_ptr);
     tmp = list_next(tmp);
   }
-  lock_release(&files_sync_lock);
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }
 
-static int
-sys_exec(const char *cmd){
+int
+exec(const char *cmd){
   struct thread *cur = thread_current ();
   
   void * phys_page_ptr = (void *) pagedir_get_page(thread_current()->pagedir, (const void*)cmd);
@@ -289,141 +429,7 @@ sys_exec(const char *cmd){
 	return child_tid;
 }
 
-static int
-sys_wait(pid_t pid){
+int
+wait(pid_t pid){
   return process_wait(pid);
-}
-
-
-static void
-syscall_handler (struct intr_frame *f UNUSED) 
-{
-
-  for(int i = 0; i < 4; i++) {
-    validate_pointer(f->esp + i);
-  }
-
-  int sys_code = *(int *)f->esp;
-
-  switch (sys_code)
-  {
-  case SYS_HALT:
-    {
-      halt();
-      break;
-    }
-  
-  case SYS_EXIT:
-  {
-    validate_pointer(f->esp + 4);
-    int status = *((uint32_t *)f->esp + 1);
-    sys_exit(status);
-    break;
-  }
-  case SYS_EXEC:
-  {
-    validate_pointer(f->esp + 4);
-    char* cmd = (char*)(*((int*)f->esp + 1));
-    //printf("cmd: %s\n", cmd);
-    f->eax = sys_exec (cmd);
-    break;
-  }
-
-  case SYS_WAIT:
-  {
-    validate_pointer(f->esp + 4);
-    int pid = *((int*)f->esp + 1);
-    f->eax = sys_wait(pid);
-    break;
-  }
-
-  case SYS_CREATE:
-    {
-    validate_pointer(f->esp + 4);
-    validate_pointer(f->esp + 8);
-    char* file=(char*)(*((int*)f->esp + 1));
-    unsigned size = *((int*)f->esp + 2);
-    if(file== NULL)sys_exit(-1);
-    f->eax=sys_create(file,size);
-    break;
-  }
-
-  case SYS_REMOVE:
-    {
-      validate_pointer(f->esp + 4);
-      char* file=(char*)(*((int*)f->esp + 1));
-      if(file== NULL)sys_exit(-1);
-      f->eax=sys_remove(file);
-      break;
-    }
-
-  case SYS_OPEN:{
-    validate_pointer(f->esp + 4);
-    char* file = (char*) (*((int*)f->esp + 1));
-    if(file== NULL)sys_exit(-1);
-    f->eax = sys_open(file);
-    break;
-  }
-    
-
-  case SYS_FILESIZE:
-  {
-    validate_pointer(f->esp + 4);
-    int fd = *((int*)f->esp + 1);
-    f->eax = sys_filesize(fd);
-    break;
-  }
-
-  case SYS_READ:
-    {
-    validate_pointer(f->esp + 12);
-    validate_pointer(f->esp + 8);
-    validate_pointer(f->esp + 4);
-    
-    int fd = *((int*)f->esp + 1);
-    void* buffer = (void*)(*((int*)f->esp + 2));
-
-    unsigned size = *((unsigned*)f->esp + 3);
-    validate_buffer(buffer,size);
-    f->eax = sys_read(fd, buffer, size);
-
-    break;
-  }
-
-  case SYS_WRITE:
-  {
-    validate_pointer(f->esp + 12);
-    validate_pointer(f->esp + 8);
-    validate_pointer(f->esp + 4);
-    
-    int fd = *((int*)f->esp + 1);
-    void* buffer = (void*)(*((int*)f->esp + 2));
-
-    unsigned size = *((unsigned*)f->esp + 3);
-    validate_buffer(buffer,size);
-    f->eax = sys_write(fd, buffer, size);
-
-    break;
-  }
-  case SYS_SEEK:
-   validate_pointer(f->esp + 4);
-    break;
-
-  case SYS_TELL:
-   validate_pointer(f->esp + 4);
-    break;
-
-  case SYS_CLOSE:
-   {
-    validate_pointer(f->esp + 4);
-    sys_close(*((int*)f->esp + 1));
-    break;
-    }
-    
-  default:
-    sys_exit(-1);
-    break;
-  }
-
-  //thread_exit ();
 }

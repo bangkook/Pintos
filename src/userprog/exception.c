@@ -150,8 +150,8 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   if(!user || is_kernel_vaddr(fault_addr))
-      sys_exit(-1);
+   if(!user || is_kernel_vaddr(fault_addr) || not_present)
+      exit(-1);
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
@@ -163,11 +163,3 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
-
-static void
-sys_exit(int status) {
-  //thread_current()->exit_status = status;
-  printf("%s: exit(%d)\n", thread_current()->name, status);
-  thread_exit();
-}
-
