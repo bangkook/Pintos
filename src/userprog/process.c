@@ -107,6 +107,8 @@ start_process (void *file_name_)
     if(thread_current()->parent != NULL){ 
       thread_current()->parent->child_success = true;
       list_push_back(&thread_current()->parent->children, &thread_current()->child_elem);
+      // wake up parent and make child sleep {old has higher priority than the new thread}
+      // thread_current is the child process
       sema_up(&thread_current()->parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
     }
