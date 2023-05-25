@@ -53,18 +53,56 @@ Nisreen Hisham <nancyhisham2003@gmail.com>
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
-
+    1. struct open_file
+    {
+        struct list_elem file_elem;
+        struct file *file_ptr;
+        int fd;
+    };
+    ==> This struct is used to define an interface for dealing with files 
+    The struct has three fields:
+        * struct list_elem file_elem: used to add the open_file object to the list of file descriptors 
+        for a thread, and to be able to iterate on it.
+        * struct file *file_ptr: a pointer to the file in the file system.
+            It provides a reference to the file object in the file system, 
+            which contains information such as the file's name, size, and location on disk.
+            This allows the operating system to perform file operations such as reading and writing data to the file.
+        * int fd: the file descriptor number assigned to the open_file.
+            It is used to uniquely identify the open file within the process. 
+            A new file descriptor number (fd) is assigned to each open file when it is created. 
+            This number is used by the process to refer to the file in the operations (read, write, seek, ... etc.).
+    2. typedef int pid_t; ==> This is an int return value for the exec, and a parameter of the wait functions. 
+        It represents the process pid which is 1-1 mapping with the tid_t.
+    3. static struct lock files_sync_lock; ==> This struct is to Synchronize access to the files. 
+        We acquire the lock at the beginning of any operation to ensure that no two fds are accessing the file
+        simultaneously and then at the end, we release the lock.
+    4. In struct thread, we added:
+        #ifdef USERPROG
+            /* Owned by userprog/process.c. */
+            /*userprog data*/
+            uint32_t *pagedir;                  /* Page directory. */
+            struct thread *parent;              /* Points to the parent that created this thread. */
+            tid_t waiting_on;                   /* Represents the tid of the thread that we are waiting on*/
+            struct list children;                 /* List of children owned by this thread*/
+            int exit_status;                    /* Has the exit status of the thread*/
+            int child_status;                   /* Has the exit status of the thread that we are waiting on*/
+            bool child_success;                 /* represents the state of the child process*/
+            struct list_elem child_elem;        /* List element to be able to iterate through the children list. */
+            struct list file_descriptors;      /* List of file descriptors held to this thread. */
+            struct semaphore waiting_on_child;  /* Make parent wait on a child process */
+            struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
+            int fd_count;                     /* count the number of the file descriptors held by this thread. */
+        #endif
+        
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
-File descriptors are integers that are returned by the open(const char *file).
-When a file is opened using open, it is assigned the next available file descriptor.
-The first file opened will have fd = 2, the next will have fd = 3, ..etc.
-
-Each process has an independent set of file descriptors. 
-Thus, fds are unique within a single process.
-File descriptors are not inherited by child processes.
+- File descriptors are integers that are returned by the open(const char *file).
+    When a file is opened using open, it is assigned the next available file descriptor.
+    The first file opened will have fd = 2, the next will have fd = 3, ..etc.
+    Each process has an independent set of file descriptors. Thus, fds are unique within a single process.
+    File descriptors are not inherited by child processes.
 
 ---- ALGORITHMS ----
 
@@ -95,6 +133,23 @@ For the write:
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
+- The wait in syscall calls process_wait which is used by the parent process to wait for the child process 
+    to terminate and retrieve child's exit status.
+    The function takes child_tid as a parameter to wait for.
+    * First, we check if the current thread (parent) has any children to wait for.
+        If not, it returns -1.
+    * Next, we search the list of children of the parent to find the child process with the given child_tid. 
+        If we find the child, we set the child_thread and break from the loop.
+        If we finished the loop and the chikd_thread is still equal to NULL, we return -1.
+    * We make the parent's waiting_on value equals the child_tid. This is to make the parent process points
+        to the child that we will wait on
+    * Then the child thread wakes up on the parent_child_sync. This semaphore is used to wake up the 
+        child process and signal that its parent is waiting for it.
+    * Then we remove the child from the list of children of the current thread, because parent waits for any given child at most once.
+    * The parent waits on the waiting_on_child semaphore. This semaphore is used to block the 
+        parent process until the child process terminates.
+    * When the child process exits in process_exit(), it sema_up the waiting_on_child semaphore to wake up the parent thread. 
+    * Finally, the parent process is unblocked and retrieves the child's exit status.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the

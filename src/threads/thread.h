@@ -111,15 +111,15 @@ struct thread
    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-   uint32_t *pagedir;                  /* Page directory. */
    /*userprog data*/
-   struct thread *parent;
-   tid_t waiting_on;
-   struct list children;
+   uint32_t *pagedir;                  /* Page directory. */
+   struct thread *parent;              /* Points to the parent that created this thread. */
+   tid_t waiting_on;                   /* Represents the tid of the thread that we are waiting on*/
+   struct list children;                 /* List of children owned by this thread*/
    int exit_status;                    /* Has the exit status of the thread*/
-   int child_status;               
-   bool child_success;
-   struct list_elem child_elem;
+   int child_status;                   /* Has the exit status of the thread that we are waiting on*/
+   bool child_success;                 /* represents the state of the child process*/
+   struct list_elem child_elem;        /* List element to be able to iterate through the children list. */
    struct list file_descriptors;      /* List of file descriptors held to this thread. */
    struct semaphore waiting_on_child;  /* Make parent wait on a child process */
    struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
