@@ -271,9 +271,21 @@ For the write:
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+    To access user memory from the kernel, we made the function called validate_pointer
+    
+    void validate_pointer(const void* vaddr) {
+        if(!is_user_vaddr(vaddr)|| vaddr == NULL || vaddr < (void *) 0x08048000)
+            exit(-1);
+    }
+    This checks that the memory accesses are in user space not in the kernel space.
+
+    In the case of an invalid pointer or an unmapped page we exit(-1) in page fault and kill the running process. 
+    We implemented it this way because of simplicity and unity.
+    Another advantage is that it reduces the resource waste.
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
-     Advantages of the design for file descriptors:
+    Advantages of the design for file descriptors:
         Simplicity: The design uses a list to store open file descriptors associated with a thread. This allows for easy management 
         of file descriptors and simplifies the implementation of system calls related to file operations.
 
