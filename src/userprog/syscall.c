@@ -227,7 +227,6 @@ remove(const char *file_name){
 int
 write(int fd, const void* buffer, unsigned size) {
   lock_acquire(&files_sync_lock);
-
   if(fd == 1) { // writes to the console
     putbuf(buffer, size);
     lock_release(&files_sync_lock);
@@ -237,7 +236,7 @@ write(int fd, const void* buffer, unsigned size) {
     lock_release(&files_sync_lock);
     return 0;
   }
-
+  // valid file descriptor
   struct list_elem *temp;
   for (temp = list_front(&thread_current()->file_descriptors); temp != NULL; temp = temp->next){
     struct open_file *t = list_entry(temp, struct open_file, file_elem);
@@ -248,10 +247,7 @@ write(int fd, const void* buffer, unsigned size) {
         return bytes_written;
       }
   }
-
   lock_release(&files_sync_lock);
-  if (size == 0) return 0;
-  else return -1;
 }
 
 int 
@@ -274,7 +270,7 @@ read (int fd, void *buffer, unsigned size)
   if (fd == 1 || list_empty(&thread_current()->file_descriptors))
   {
     lock_release(&files_sync_lock);
-    return 0;//-1
+    return 0; //-1
   }
 
   struct list_elem *e;
