@@ -8,10 +8,11 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-
+Eman Samir <eman.samir22.es@gmail.com>
+Sara Gaballa <saragaballa2002@gmail.com>
+Maria Bassem <maria.college2025@gmail.com>
+Mariam Hossam <m.hossam2551@gmail.com>
+Nisreen Hisham <nancyhisham2003@gmail.com>
 ---- PRELIMINARIES ----
 
 >> If you have any preliminary comments on your submission, notes for the
@@ -57,10 +58,32 @@ FirstName LastName <email@domain.example>
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
+File descriptors are integers that are returned by the open(const char *file).
+When a file is opened using open, it is assigned the next available file descriptor.
+The first file opened will have fd = 2, the next will have fd = 3, ..etc.
+
+Each process has an independent set of file descriptors. 
+Thus, fds are unique within a single process.
+File descriptors are not inherited by child processes.
+
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+For the read:
+    - 
+For the write:
+    -  The function first acquires a lock named files_sync_lock to ensure that
+    multiple threads don't write to the same file descriptor at the same time.
+    * If fd is equal to 1, the function writes the data to the console using
+        the putbuf function and releases the lock. It then returns the number of bytes written.
+    * If fd is equal to 0 or the current thread has no open file descriptors, 
+        the function releases the lock and returns 0 because nothing was written.
+    * If fd is a valid file descriptor, the function searches the list of 
+        open file descriptors owned by the thread to find the corresponding struct open_file object. 
+        Once it finds the object, it calls the file_write function which is defined in file.c 
+        with the file pointer, buffer, and size arguments. It then releases the lock and returns
+        the number of bytes written.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -71,6 +94,7 @@ FirstName LastName <email@domain.example>
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
