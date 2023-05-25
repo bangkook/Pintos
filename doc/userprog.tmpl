@@ -93,7 +93,11 @@ Nisreen Hisham <nancyhisham2003@gmail.com>
             struct semaphore parent_child_sync; /* Synchronize the creation of communication link between parent and child. */
             int fd_count;                     /* count the number of the file descriptors held by this thread. */
         #endif
-        
+    ==> for the initialization, we made the exit_status and the child_status = -1.
+        The fd_count is the number of file descriptors held by the process. It is initially 2 because it can't be less than that.
+        waiting_on is initially -1 because we are not waiting on any child. Parent is NULL.
+        The file descriptors list is the list of the file descriptors opened by the porcess.
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
@@ -198,6 +202,29 @@ For the write:
 >> that all resources are freed in each case?  How about when P
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
+    In both cases, proper synchronization is achieved between the parent and child processes using
+    parent_child_sync semaphore and thread data, ensuring that the parent waits for the child to terminate and retrieves
+    the correct exit status without encountering race conditions. 
+    * Synchronization when P calls wait(C) before C exits: 
+        In this case, the parent process enters the process_wait function and waits on the waiting_on_child
+        semaphore using sema_down(&thread_current()->waiting_on_child). 
+        The child process C will eventually terminate and signal the parent process by calling sema_up(&child_thread->parent_child_sync). 
+        The parent process, being unblocked by the semaphore, continues execution and then retrieves the child's exit status, and returns it. 
+    
+    * Synchronization when P calls wait(C) after C exits: 
+    If the child process C has already exited before the parent process calls wait(C), there is no need for synchronization because the 
+    child's termination is already complete. The child process, upon termination, sets the child_status member of the parent thread to its exit status. 
+    When the parent process enters the process_wait function and checks the list_empty(&thread_current()->children) condition, it will find that the list
+    of children is empty, indicating that the child has already exited. 
+    The parent process skips the waiting and directly retrieves the child's exit status from thread_current()->child_status and returns it.
+    
+    * P terminates before C exits: We wake up all the children of the P by sema_up on the parent_child_sync semaphore
+
+
+    * P terminates after C exits: {Normal Case}
+    If the parent process P terminates after the child process C has already exited, there are no special cases to handle.
+    Since the child process C has already terminated, its exit status should have been recorded, and any necessary cleanup should have been performed.
+
 
 
 
@@ -208,9 +235,30 @@ For the write:
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
+     Advantages of the design for file descriptors:
+        Simplicity: The design uses a list to store open file descriptors associated with a thread. This allows for easy management 
+        of file descriptors and simplifies the implementation of system calls related to file operations.
+
+
+        Scalability: The design allows multiple files to be opened simultaneously by a single thread. Each file descriptor is 
+        associated with a unique file, enabling concurrent access to different files.
+
+
+        Thread safety: The use of a lock (files_sync_lock) ensures that file operations are synchronized and prevent concurrent 
+        access to file descriptors, providing thread safety.
+    
+    Disadvantages of the design for file descriptors:
+        Linear search: When performing file operations, the design currently uses a linear search to find the file descriptor in the list. 
+        This linear search can become inefficient as the number of open file descriptors increases. 
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+    We didn't change this mapping. The tid_t and the pid_t are 1 to 1 mapped in our implementation.
+    * A tid_t identifies a kernel thread, which may have a user process running in it (if created with process_execute()) or not 
+    (if created with thread_create()). It is a data type used only in the kernel.
+    * A pid_t identifies a user process. It is used by user processes and the kernel in the exec and wait system calls.
+    By default, they're both int. We made them one-to-one mapping, so that the same values in both identify the same process.
 
                SURVEY QUESTIONS
                ================
