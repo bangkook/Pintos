@@ -185,8 +185,12 @@ For the write:
 
     By using the semaphore parent_child_sync and the child_success flag, the code ensures
     that the parent process waits for the child process to complete loading before continuing execution.
+    Once the child thread is created, the parent performs a "semaphore down" operation, waiting until the 
+    child calls "semaphore up" after completing its loading process.
     It also provides a mechanism for the child process to indicate whether the loading was successful or not,
-    allowing the exec system call to return the appropriate value (-1 for failure or the child process identifier for success).
+    If the loading process fails, the child's return status is set to an error value (False) before waking up the parent through
+    the semaphore operation allowing the exec system call to return the appropriate value (-1 for failure or the child process
+     identifier for success).
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
