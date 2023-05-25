@@ -22,7 +22,7 @@ Nisreen Hisham <nancyhisham2003@gmail.com>
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
 
-               ARGUMENT PASSING
+                ARGUMENT PASSING
                ================
 
 ---- DATA STRUCTURES ----
@@ -31,11 +31,49 @@ Nisreen Hisham <nancyhisham2003@gmail.com>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+No new declarations for this part.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
+
+After succefully loading the executable file, we start pushing arguments to stack.
+
+start_process provides file_name, consisting of the executable name and arguments.
+First, we parse file_name to extract all tokens and store them in an array of strings
+(argv) and store their count in (argc).
+
+We start pushing each token to the stack one by one, storing the address of each argument 
+in the stack sequentially in an array of pointers (args_ptr). Then, we add word alignment.
+Then, push the address of each string plus a null pointer sentinel, on the stack, in
+right-to-left order. These are the elements of argv. The null pointer sentinel ensures that
+argv[argc] is a null pointer, as required by the C standard. The order ensures that argv[0]
+is at the lowest virtual address so that we pull arguments in the right order.
+Then, push argv (the address of argv[0]) and argc, in that order. Finally, push a fake
+“return address” which is NULL.
+
+How to avoid overflowing the stack page?
+----------------------------------------
+Instead of checking the stack pointer each time before pushing an item, we let it fails,
+and we handle the page fault exception, by calling exit(-1) for the running thread whenever
+the address is invalid. As it seems reasonable to terminate the process if stack overflows.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+Because strtok() saves the next token value in a global data, so it is unsafe in threaded programs
+such as kernels. we use strtok_r() instead, because it is thread safe.
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+1. Less overhead and time in the kernel.
+2. Avoid kernel fail as validation is done on user side by checking first for the correctness of the 
+executable name and its existence.
 
 ---- RATIONALE ----
 
