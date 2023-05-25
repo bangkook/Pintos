@@ -109,7 +109,19 @@ Nisreen Hisham <nancyhisham2003@gmail.com>
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
 For the read:
-    - 
+    - The function first acquires a lock named files_sync_lock to ensure that
+    there is no other thread tries to write to the file while reading it.
+    * If the size equal to 0 the lock is realised and 0 is returned as 0 bytes were read. 
+    * If fd is equal to 0 it will read the input from the user in c then the function releases
+     the lock and returns c because nothing was written.
+    * If fd is equal to 1, the function writes the data to the console using
+        the putbuf function and releases the lock. It then returns the number of bytes written.
+   
+    * If fd is a valid file descriptor, the function searches the list of 
+        open file descriptors owned by the thread to find the corresponding struct open_file object. 
+        Once it finds the object, it calls the file_write function which is defined in file.c 
+        with the file pointer, buffer, and size arguments. It then releases the lock and returns
+        the number of bytes written.
 For the write:
     -  The function first acquires a lock named files_sync_lock to ensure that
     multiple threads don't write to the same file descriptor at the same time.
@@ -172,12 +184,19 @@ For the write:
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
+    By using the semaphore parent_child_sync and the child_success flag, the code ensures
+    that the parent process waits for the child process to complete loading before continuing execution.
+    It also provides a mechanism for the child process to indicate whether the loading was successful or not,
+    allowing the exec system call to return the appropriate value (-1 for failure or the child process identifier for success).
+
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
 >> calls wait(C) before C exits?  After C exits?  How do you ensure
 >> that all resources are freed in each case?  How about when P
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
+
+
 
 ---- RATIONALE ----
 
