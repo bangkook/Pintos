@@ -29,6 +29,23 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+
+static void validate_pointer(const void* vaddr) {
+  if(!is_user_vaddr(vaddr)|| vaddr == NULL || vaddr < (void *) 0x08048000)
+    sys_exit(-1);
+}
+
+void validate_buffer (void *buffer, unsigned size)
+{
+  unsigned i;
+  char *ptr  = (char * )buffer;
+  for (i = 0; i < size; i++)
+    {
+      validate_pointer((const void *) ptr);
+      ptr++;
+    }
+}
+
 static void
 halt() {
   shutdown_power_off();
@@ -38,9 +55,9 @@ bool
 sys_create (const char *file_name, unsigned size)
 {
   bool status;
-  if(file_name==NULL){
-    sys_exit(-1);
-  }
+  // if(file_name==NULL){
+  //   sys_exit(-1);
+  // }
   lock_acquire (&files_sync_lock);
   status = filesys_create(file_name, size);  
   lock_release (&files_sync_lock);
@@ -50,9 +67,9 @@ sys_create (const char *file_name, unsigned size)
 bool
 sys_remove(const char *file_name){
   bool status;
-  if(file_name==NULL){
-    sys_exit(-1);
-  }
+  // if(file_name==NULL){
+  //   sys_exit(-1);
+  // }
   lock_acquire (&files_sync_lock);
   status = filesys_remove(file_name);  
   lock_release (&files_sync_lock);
@@ -61,20 +78,20 @@ sys_remove(const char *file_name){
 
 
 static int
-write(int fd, const void* buffer, unsigned size) {
+sys_write(int fd, const void* buffer, unsigned size) {
   lock_acquire(&files_sync_lock);
-  if(size == 0 || buffer == NULL){
-    lock_release(&files_sync_lock);
-    return 0;
-  }
+  // if(size == 0 || buffer == NULL){
+  //   lock_release(&files_sync_lock);
+  //   return 0;
+  // }
   
-  // Validate buffer  
-  for (unsigned i = 0; i < size; i++) {
-    if (((char*)buffer)[i] == '\0') {
-        lock_release(&files_sync_lock);
-        return -1;  // Invalid buffer                 
-    }
-  }
+  // // Validate buffer  
+  // for (unsigned i = 0; i < size; i++) {
+  //   if (((char*)buffer)[i] == '\0') {
+  //       lock_release(&files_sync_lock);
+  //       return -1;  // Invalid buffer                 
+  //   }
+  // }
 
   //printf("%d\n", fd);
   if(fd == 1) { // writes to the console
@@ -108,13 +125,65 @@ write(int fd, const void* buffer, unsigned size) {
   else return -1;
 }
 
+static int sys_read (int fd, void *buffer, unsigned size)
+{
 
-static int open (const char *file){
+  // validate_buffer(buffer,size);
+  // if(buffer == NULL){
+  //   sys_exit(-1);
+  // }
+  // void * phys_page_ptr = (void *) pagedir_get_page(thread_current()->pagedir, (const void*)buffer);
+  // if( phys_page_ptr == NULL)
+  //   sys_exit(-1);
+
   lock_acquire(&files_sync_lock);
-  if(file == NULL){
+  if(size == 0){
     lock_release(&files_sync_lock);
-    sys_exit(-1);
+    return 0;//0
   }
+
+  if (fd == 0)
+  {
+    lock_release(&files_sync_lock);
+    return (int) input_getc();
+  }
+
+  if (fd == 1 || list_empty(&thread_current()->file_descriptors))
+  {
+    lock_release(&files_sync_lock);
+    return 0;//-1
+  }
+
+    struct list_elem *e;
+  struct open_file *t = NULL;
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors);
+       e = list_next(e)) {
+    struct open_file *f = list_entry(e, struct open_file, file_elem);
+    if (f->fd == fd) {
+      t = f;
+      break;
+    }
+  }
+
+  if (t == NULL) {
+    lock_release(&files_sync_lock);
+    return -1;
+  }
+
+  int bytes = file_read(t->file_ptr, buffer, size);
+  lock_release(&files_sync_lock);
+  return bytes;
+
+}
+
+
+static int sys_open (const char *file){
+  lock_acquire(&files_sync_lock);
+  // if(file == NULL){
+  //   lock_release(&files_sync_lock);
+  //   sys_exit(-1);
+  // }
   struct file* myFile_ptr = filesys_open(file);
   if(myFile_ptr == NULL){
     lock_release(&files_sync_lock);
@@ -130,9 +199,78 @@ static int open (const char *file){
   return fd;
 }
 
+static void 
+sys_close (int fd)
+{
+  
+  lock_acquire(&files_sync_lock);
+
+  if (list_empty(&thread_current()->file_descriptors))
+  {
+    lock_release(&files_sync_lock);
+    return;
+  }
+  struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
+
+  while(tmp != list_end(&thread_current()->file_descriptors)){
+    struct open_file *t = list_entry(tmp, struct open_file, file_elem);
+      if (t->fd == fd)
+      {
+        file_close(t->file_ptr);
+        list_remove(&t->file_elem);
+        lock_release(&files_sync_lock);
+        return;
+      }
+    tmp = list_next(tmp);
+  }
+ 
+  lock_release(&files_sync_lock);
+
+  return;
+}
+
+static int 
+sys_filesize (int fd)
+{
+  lock_acquire(&files_sync_lock);
+
+  if (list_empty(&thread_current()->file_descriptors))
+  {
+    lock_release(&files_sync_lock);
+    return -1;
+  }
+
+  struct list_elem *temp;
+  for (temp = list_front(&thread_current()->file_descriptors); temp != NULL; temp = temp->next)
+  {
+      struct open_file *t = list_entry (temp, struct open_file, file_elem);
+      if (t->fd == fd)
+      {
+        int length =(int) file_length(t->file_ptr);
+        lock_release(&files_sync_lock);
+        return length;
+      }
+  }
+
+  lock_release(&files_sync_lock);
+  return -1;
+}
+
 static void
 sys_exit(int status) {
   thread_current()->exit_status = status;
+
+  //mariam edit it if you want
+  struct list_elem *tmp = list_begin(&thread_current()->file_descriptors);
+  lock_acquire(&files_sync_lock);
+  while(tmp != list_end(&thread_current()->file_descriptors)){
+    struct open_file *t = list_entry(tmp, struct open_file, file_elem);
+        file_close(t->file_ptr);
+        list_remove(&t->file_elem);
+        
+    tmp = list_next(tmp);
+  }
+  lock_release(&files_sync_lock);
   printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }
@@ -156,10 +294,7 @@ sys_wait(pid_t pid){
   return process_wait(pid);
 }
 
-static void validate_pointer(const void* vaddr) {
-  if(!is_user_vaddr(vaddr))
-    sys_exit(-1);
-}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -208,6 +343,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     validate_pointer(f->esp + 8);
     char* file=(char*)(*((int*)f->esp + 1));
     unsigned size = *((int*)f->esp + 2);
+    if(file== NULL)sys_exit(-1);
     f->eax=sys_create(file,size);
     break;
   }
@@ -216,6 +352,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       validate_pointer(f->esp + 4);
       char* file=(char*)(*((int*)f->esp + 1));
+      if(file== NULL)sys_exit(-1);
       f->eax=sys_remove(file);
       break;
     }
@@ -223,18 +360,35 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_OPEN:{
     validate_pointer(f->esp + 4);
     char* file = (char*) (*((int*)f->esp + 1));
-    f->eax = open(file);
+    if(file== NULL)sys_exit(-1);
+    f->eax = sys_open(file);
     break;
   }
     
 
   case SYS_FILESIZE:
+  {
     validate_pointer(f->esp + 4);
+    int fd = *((int*)f->esp + 1);
+    f->eax = sys_filesize(fd);
     break;
+  }
 
   case SYS_READ:
+    {
+    validate_pointer(f->esp + 12);
+    validate_pointer(f->esp + 8);
     validate_pointer(f->esp + 4);
+    
+    int fd = *((int*)f->esp + 1);
+    void* buffer = (void*)(*((int*)f->esp + 2));
+
+    unsigned size = *((unsigned*)f->esp + 3);
+    validate_buffer(buffer,size);
+    f->eax = sys_read(fd, buffer, size);
+
     break;
+  }
 
   case SYS_WRITE:
   {
@@ -246,8 +400,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     void* buffer = (void*)(*((int*)f->esp + 2));
 
     unsigned size = *((unsigned*)f->esp + 3);
-
-    f->eax = write(fd, buffer, size);
+    validate_buffer(buffer,size);
+    f->eax = sys_write(fd, buffer, size);
 
     break;
   }
@@ -260,8 +414,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
 
   case SYS_CLOSE:
+   {
     validate_pointer(f->esp + 4);
+    sys_close(*((int*)f->esp + 1));
     break;
+    }
     
   default:
     sys_exit(-1);
