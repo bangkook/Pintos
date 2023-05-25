@@ -218,6 +218,23 @@ For the write:
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+There are two methods employed to safeguard system calls against invalid access. 
+The first approach involves conducting checks within the system call handler before
+initiating the call. These checks ensure that all parameters are located in user space. 
+For read and write system calls, additional verification is performed to confirm that the buffer 
+spans in user space. In the case of file handling calls, ownership of the file by the current thread 
+is validated, and a file lock is utilized to synchronize access. If any of these checks fail, the 
+process is terminated by executing the exit system call.
+In the sys exit call we make sure that any resources held by the current process
+are freed. First we iterate over all its opened files, free the user file
+structure and remove it from its thread file descriptors list. Then the function calls 
+thread exit.
+If, for instance, an invalid pointer value is encountered while performing a write system call, 
+it will be detected either during the initial checks in the "validate_pointer" function or in the "validate_buffer" function. 
+In both scenarios, the functions for system exit, thread exit, and process exit are invoked. This guarantees that all mappings 
+belonging to child processes are cleared and all resources associated with the process are released.
+
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
